@@ -1,6 +1,6 @@
 ## 👽 Singularity
 
-<img src="https://komarev.com/ghpvc/?username=singudotdev&label=Profile%20views&color=0e75b6&style=flat" alt="singudotdev" />
+<img src="https://img.shields.io/badge/Singu-DEV-green" alt="singudotdev" /> <img src="https://komarev.com/ghpvc/?username=singudotdev&label=Profile%20views&color=0e75b6&style=flat" alt="singudotdev" />
 
 - DevSecOps
 - Software Architecture and Engineering
