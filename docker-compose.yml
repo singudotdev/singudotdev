@@ -1,0 +1,13 @@
+services:
+  web:
+    image: registry.singu.dev/web/web:${IMAGE_TAG}
+    ports:
+      - 80:80
+    networks:
+      - web
+
+networks:
+  web:
+    external: false
+    name: web
+    driver: overlay
