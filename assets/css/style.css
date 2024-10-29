@@ -3,6 +3,7 @@
 --------------------------------------------------------------*/
 body {
   color: #272829;
+  font-family: 'Hack Nerd Font', sans-serif;
 }
 
 a {
@@ -13,10 +14,6 @@ a {
 a:hover {
   color: #00b590;
   text-decoration: none;
-}
-
-body {
-  font-family: 'Hack Nerd Font', sans-serif;
 }
 
 /* Update other relevant CSS rules to use the Hack Nerd Font */
@@ -144,7 +141,6 @@ h1, h2, h3, h4, h5, h6 {
   height: 56px;
   width: 100%;
   overflow: hidden;
-  transition: 0.3s;
 }
 
 .nav-menu a i,
