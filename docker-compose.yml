@@ -1,12 +1,26 @@
 services:
-  web:
-    image: registry.singu.dev/web/singudotdev:${IMAGE_TAG}
-    ports:
-      - 80:80
+  app:
+    image: registry.singu.dev/singudotdev/web:${IMAGE_TAG}
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      labels:
+        - traefik.enable=true
+        - traefik.swarm.network=traefik
+        - traefik.http.routers.singudotdev.rule=Host(`singu.dev`)
+        - traefik.http.routers.singudotdev.entrypoints=websecure
+        - traefik.http.routers.singudotdev.tls=true
+        - traefik.http.services.singudotdev-service.loadbalancer.server.scheme=http
+        - traefik.http.services.singudotdev-service.loadbalancer.server.port=80
     networks:
+      - traefik
       - web
 
 networks:
+  traefik:
+    name: traefik
+    external: true
   web:
     external: false
     name: web
