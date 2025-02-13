@@ -9,3 +9,7 @@
 - System Administration
 - Cybersecurity
 - Pentesting
+
+<img src="https://raw.githubusercontent.com/singudotdev/singudotdev/output/snake.svg" alt="Snake animation" />
+
+###
