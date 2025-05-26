@@ -10,7 +10,7 @@ services:
         - traefik.swarm.network=traefik
         - traefik.http.routers.singudotdev.rule=Host(`singu.dev`)
         - traefik.http.routers.singudotdev.entrypoints=websecure
-        - traefik.http.routers.singudotdev.tls=true
+        - traefik.http.routers.singudotdev.tls.certResolver=letsencrypt
         - traefik.http.services.singudotdev-service.loadbalancer.server.scheme=http
         - traefik.http.services.singudotdev-service.loadbalancer.server.port=80
     networks:
