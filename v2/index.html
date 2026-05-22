@@ -1,0 +1,2958 @@
+<!--
+  Project: Singularity Terminal Access Portfolio Site
+  Author: singudotdev (singu.dev)
+  License: CC-BY-4.0
+-->
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <title>SINGULARITY.SYS — TERMINAL</title>
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=VT323&family=Share+Tech+Mono&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            /* ------------------------------------------------------------------ */
+            /*  16-color IBM VGA palette (Turbo Vision era)                       */
+            /* ------------------------------------------------------------------ */
+            :root {
+                --c-black: #000000;
+                --c-blue: #0000aa;
+                --c-green: #00aa00;
+                --c-cyan: #00aaaa;
+                --c-red: #aa0000;
+                --c-magenta: #aa00aa;
+                --c-brown: #aa5500;
+                --c-ltgray: #aaaaaa;
+                --c-dkgray: #555555;
+                --c-ltblue: #5555ff;
+                --c-ltgreen: #55ff55;
+                --c-ltcyan: #55ffff;
+                --c-ltred: #ff5555;
+                --c-ltmag: #ff55ff;
+                --c-yellow: #ffff55;
+                --c-white: #ffffff;
+
+                --font-term:
+                    "VT323", "Share Tech Mono", ui-monospace, monospace;
+                --char-w: 10px; /* approximate monospace cell */
+                --char-h: 20px;
+            }
+
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+            }
+            html,
+            body {
+                margin: 0;
+                padding: 0;
+                height: 100%;
+                overflow: hidden;
+            }
+
+            body {
+                font-family: var(--font-term);
+                color: var(--c-white);
+                background: var(--c-black);
+                font-size: 20px;
+                line-height: 1;
+                cursor: default;
+                user-select: none;
+                -webkit-font-smoothing: none;
+                text-rendering: geometricPrecision;
+            }
+
+            /* ------------------------------------------------------------------ */
+            /*  CRT shell — vignette + curvature + scanlines + flicker            */
+            /* ------------------------------------------------------------------ */
+            .crt {
+                position: fixed;
+                inset: 0;
+                overflow: hidden;
+                background: radial-gradient(
+                    ellipse at center,
+                    #0a1530 0%,
+                    #000 90%
+                );
+            }
+            /* phosphor desktop layer holding all DOS content */
+            .crt-screen {
+                position: absolute;
+                inset: 0;
+                background:
+                    repeating-linear-gradient(
+                        90deg,
+                        rgba(0, 0, 0, 0) 0 1px,
+                        rgba(0, 0, 0, 0.04) 1px 2px
+                    ),
+                    var(--c-blue);
+                /* checkerboard dither texture (Turbo Vision desktop) */
+                background-image:
+                    radial-gradient(
+                        rgba(255, 255, 255, 0.08) 1px,
+                        transparent 1px
+                    ),
+                    radial-gradient(rgba(0, 0, 0, 0.18) 1px, transparent 1px),
+                    linear-gradient(var(--c-blue), var(--c-blue));
+                background-size:
+                    4px 4px,
+                    4px 4px,
+                    100% 100%;
+                background-position:
+                    0 0,
+                    2px 2px,
+                    0 0;
+                filter: contrast(1.05) saturate(1.1);
+            }
+            /* scanlines layer */
+            .crt-scanlines {
+                position: absolute;
+                inset: 0;
+                pointer-events: none;
+                background: repeating-linear-gradient(
+                    to bottom,
+                    rgba(0, 0, 0, 0) 0,
+                    rgba(0, 0, 0, 0) 2px,
+                    rgba(0, 0, 0, 0.35) 3px,
+                    rgba(0, 0, 0, 0) 4px
+                );
+                mix-blend-mode: multiply;
+                z-index: 9000;
+            }
+            /* vignette */
+            .crt-vignette {
+                position: absolute;
+                inset: 0;
+                pointer-events: none;
+                background: radial-gradient(
+                    ellipse at center,
+                    transparent 55%,
+                    rgba(0, 0, 0, 0.85) 100%
+                );
+                z-index: 9001;
+            }
+            /* slow phosphor flicker */
+            .crt-flicker {
+                position: absolute;
+                inset: 0;
+                pointer-events: none;
+                background: rgba(255, 255, 255, 0.02);
+                animation: flicker 5s steps(60) infinite;
+                z-index: 9002;
+            }
+            @keyframes flicker {
+                0%,
+                100% {
+                    opacity: 0.95;
+                }
+                8% {
+                    opacity: 0.8;
+                }
+                12% {
+                    opacity: 1;
+                }
+                33% {
+                    opacity: 0.92;
+                }
+                45% {
+                    opacity: 0.88;
+                }
+                60% {
+                    opacity: 1;
+                }
+                72% {
+                    opacity: 0.94;
+                }
+            }
+            /* faint chromatic-aberration glow on text */
+            .crt-screen {
+                text-shadow: 0 0 1px rgba(255, 255, 255, 0.6);
+            }
+
+            /* slight bend at corners */
+            .crt-bezel {
+                position: absolute;
+                inset: 0;
+                pointer-events: none;
+                border-radius: 22px / 16px;
+                box-shadow:
+                    inset 0 0 80px 8px rgba(0, 0, 0, 0.65),
+                    inset 0 0 8px 2px rgba(0, 0, 0, 0.9);
+                z-index: 9003;
+            }
+
+            /* ------------------------------------------------------------------ */
+            /*  BOOT SEQUENCE                                                     */
+            /* ------------------------------------------------------------------ */
+            #boot {
+                position: absolute;
+                inset: 0;
+                background: var(--c-black);
+                color: var(--c-ltgray);
+                padding: 28px 32px;
+                font-size: 22px;
+                line-height: 1.05;
+                white-space: pre-wrap;
+                z-index: 8500;
+            }
+            #boot .hi {
+                color: var(--c-white);
+            }
+            #boot .ok {
+                color: var(--c-ltgreen);
+            }
+            #boot .warn {
+                color: var(--c-yellow);
+            }
+            #boot .err {
+                color: var(--c-ltred);
+            }
+            #boot .dim {
+                color: var(--c-dkgray);
+            }
+            #boot .cur::after {
+                content: "▌";
+                color: var(--c-ltgray);
+                animation: blink 1.05s steps(1) infinite;
+            }
+            #boot .logo {
+                color: var(--c-ltgreen);
+                font-family:
+                    "Cascadia Mono", "Consolas", "DejaVu Sans Mono",
+                    "Liberation Mono", "Courier New", monospace;
+                font-size: clamp(7px, 1.55vw, 14px);
+                line-height: 1;
+                white-space: pre;
+                margin: 0 0 18px 0;
+                letter-spacing: 0;
+                text-shadow:
+                    0 0 6px rgba(85, 255, 85, 0.55),
+                    0 0 14px rgba(85, 255, 85, 0.25);
+                animation: logo-in 0.9s ease-out;
+            }
+            @keyframes logo-in {
+                0% {
+                    opacity: 0;
+                    filter: blur(6px) brightness(2);
+                    transform: scaleY(0.05);
+                }
+                20% {
+                    opacity: 1;
+                    filter: blur(0) brightness(1);
+                    transform: scaleY(1);
+                }
+                100% {
+                    opacity: 1;
+                }
+            }
+            #boot .logo-sub {
+                color: var(--c-dkgray);
+                font-size: 16px;
+                margin: -8px 0 14px 2px;
+                letter-spacing: 6px;
+            }
+            @keyframes blink {
+                50% {
+                    opacity: 0;
+                }
+            }
+
+            /* ------------------------------------------------------------------ */
+            /*  DESKTOP                                                           */
+            /* ------------------------------------------------------------------ */
+            #desktop {
+                position: absolute;
+                inset: 0;
+                opacity: 0;
+                pointer-events: none;
+                transition: opacity 0.25s;
+            }
+            #desktop.on {
+                opacity: 1;
+                pointer-events: auto;
+            }
+
+            /* top menu bar */
+            .menubar {
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 30px;
+                background: var(--c-ltgray);
+                color: var(--c-black);
+                display: flex;
+                align-items: center;
+                padding: 0 8px;
+                gap: 14px;
+                z-index: 100;
+                line-height: 1.1;
+            }
+            .menubar .item {
+                padding: 3px 8px;
+                cursor: pointer;
+                line-height: 1.1;
+            }
+            .menubar .item u {
+                text-decoration: none;
+                color: var(--c-ltred);
+            }
+            .menubar .item:hover {
+                background: var(--c-blue);
+                color: var(--c-white);
+            }
+            .menubar .clock {
+                margin-left: auto;
+                background: var(--c-black);
+                color: var(--c-ltgreen);
+                padding: 2px 8px;
+                font-variant-numeric: tabular-nums;
+            }
+
+            /* status / function key bar */
+            .statusbar {
+                position: absolute;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                height: 26px;
+                background: var(--c-cyan);
+                color: var(--c-black);
+                display: flex;
+                align-items: center;
+                padding: 0 8px;
+                gap: 12px;
+                font-size: 18px;
+                z-index: 100;
+            }
+            .statusbar .fk {
+                display: inline-flex;
+                align-items: center;
+                gap: 4px;
+                cursor: pointer;
+                padding: 2px 4px;
+            }
+            .statusbar .fk:hover {
+                background: var(--c-black);
+                color: var(--c-cyan);
+            }
+            .statusbar .fk b {
+                color: var(--c-white);
+                background: var(--c-black);
+                padding: 0 4px;
+            }
+            .statusbar .fk:hover b {
+                background: var(--c-cyan);
+                color: var(--c-black);
+            }
+            .statusbar .right {
+                margin-left: auto;
+                display: flex;
+                gap: 12px;
+            }
+
+            /* ------------------------------------------------------------------ */
+            /*  WINDOW CHROME (Turbo Vision)                                      */
+            /* ------------------------------------------------------------------ */
+            .win {
+                position: absolute;
+                background: var(--c-cyan);
+                color: var(--c-black);
+                box-shadow: 2px 2px 0 0 rgba(0, 0, 0, 0.5);
+                min-width: 220px;
+                display: flex;
+                flex-direction: column;
+            }
+            .win.focused {
+                z-index: 50;
+            }
+            .win .tbar {
+                height: 26px;
+                flex: 0 0 26px;
+                background: var(--c-cyan);
+                color: var(--c-black);
+                display: flex;
+                align-items: center;
+                padding: 0 6px;
+                cursor: grab;
+                user-select: none;
+                border-bottom: 1px solid var(--c-black);
+            }
+            .win .tbar:active {
+                cursor: grabbing;
+            }
+            .win .tbar .title {
+                flex: 1;
+                text-align: center;
+                color: var(--c-black);
+                padding: 0 8px;
+                font-weight: normal;
+                letter-spacing: 1px;
+            }
+            .win.focused .tbar .title {
+                color: var(--c-white);
+            }
+            .win.focused .tbar {
+                background: var(--c-blue);
+                color: var(--c-white);
+            }
+            .win .btn-close {
+                width: 18px;
+                height: 18px;
+                background: var(--c-black);
+                color: var(--c-yellow);
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 16px;
+                line-height: 1;
+                cursor: pointer;
+            }
+            .win .btn-close:hover {
+                background: var(--c-ltred);
+                color: var(--c-white);
+            }
+            .win .body {
+                background: var(--c-cyan);
+                color: var(--c-black);
+                padding: 10px 12px;
+                border-top: 1px solid rgba(0, 0, 0, 0.2);
+                flex: 1 1 auto;
+                overflow: auto;
+                min-height: 0;
+                display: flex;
+                flex-direction: column;
+            }
+            /* terminal/portrait override the body's padding & set their own bg */
+            .win .body.flush {
+                padding: 0;
+            }
+
+            /* resize handle (bottom-right corner) */
+            .win .rsz {
+                position: absolute;
+                right: 0;
+                bottom: 0;
+                width: 14px;
+                height: 14px;
+                cursor: nwse-resize;
+                background: var(--c-cyan);
+                color: var(--c-black);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 12px;
+                line-height: 1;
+                user-select: none;
+                z-index: 5;
+                border-top: 1px solid var(--c-black);
+                border-left: 1px solid var(--c-black);
+            }
+            .win .rsz::after {
+                content: "◢";
+            }
+            .win.focused .rsz {
+                background: var(--c-blue);
+                color: var(--c-white);
+            }
+            .win .rsz:hover {
+                background: var(--c-yellow);
+                color: var(--c-black);
+            }
+            /* outer double-line border (drawn with two borders) */
+            .win {
+                border: 1px solid var(--c-black);
+                outline: 1px solid var(--c-black);
+                outline-offset: 1px;
+            }
+
+            /* ------------------------------------------------------------------ */
+            /*  CONTACT CARD WINDOW                                               */
+            /* ------------------------------------------------------------------ */
+            .card-body {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 8px;
+                min-width: 360px;
+            }
+            .card-body .row {
+                display: flex;
+                align-items: baseline;
+                gap: 10px;
+            }
+            .card-body .lbl {
+                color: var(--c-blue);
+                min-width: 90px;
+                text-transform: uppercase;
+            }
+            .card-body .val {
+                color: var(--c-black);
+                flex: 1;
+            }
+            .card-body .val.hl {
+                color: var(--c-red);
+                font-weight: normal;
+            }
+            .card-body hr {
+                border: 0;
+                height: 1px;
+                background: repeating-linear-gradient(
+                    to right,
+                    var(--c-black) 0 6px,
+                    transparent 6px 10px
+                );
+                margin: 4px 0;
+            }
+            .card-body .name {
+                font-size: 36px;
+                line-height: 1;
+                color: var(--c-black);
+                letter-spacing: 2px;
+            }
+            .card-body .name .blink {
+                animation: blink 1s steps(1) infinite;
+                color: var(--c-red);
+            }
+            .card-body .tag {
+                color: var(--c-blue);
+                font-size: 18px;
+                letter-spacing: 1.5px;
+                margin-top: 2px;
+            }
+
+            /* compact: applied when the viewport is short or narrow */
+            .win.compact .body {
+                padding: 6px 8px;
+            }
+            .win.compact .card-body {
+                gap: 2px;
+                min-width: 0;
+            }
+            .win.compact .card-body .name {
+                font-size: 22px;
+                letter-spacing: 1px;
+            }
+            .win.compact .card-body .tag {
+                font-size: 13px;
+                letter-spacing: 1px;
+                margin-top: 0;
+            }
+            .win.compact .card-body .row {
+                font-size: 14px;
+            }
+            .win.compact .card-body .lbl {
+                min-width: 64px;
+                font-size: 13px;
+            }
+            .win.compact .card-body hr {
+                margin: 1px 0;
+            }
+            .win.compact .card-body .meta {
+                font-size: 11px;
+                padding-top: 2px;
+            }
+            .win.compact .portrait-body {
+                font-size: 13px;
+                padding: 8px 12px;
+                line-height: 1;
+            }
+            .win.compact .portrait-body .footer {
+                font-size: 11px;
+                margin-top: 4px;
+                padding-top: 4px;
+            }
+            .card-body a {
+                color: var(--c-blue);
+                text-decoration: underline;
+                cursor: pointer;
+            }
+            .card-body a:hover {
+                background: var(--c-blue);
+                color: var(--c-yellow);
+                text-decoration: none;
+            }
+            .card-body .status-dot {
+                display: inline-block;
+                width: 8px;
+                height: 8px;
+                background: var(--c-ltgreen);
+                box-shadow: 0 0 6px var(--c-ltgreen);
+                margin-right: 6px;
+                animation: blink 1.5s steps(1) infinite;
+            }
+            .card-body .meta {
+                color: var(--c-dkgray);
+                font-size: 16px;
+                padding-top: 4px;
+            }
+            /* try-harder motto */
+            .card-body .tryharder {
+                color: var(--c-red);
+                letter-spacing: 2px;
+                font-weight: normal;
+            }
+            /* skills grid */
+            .card-body .skills-hdr {
+                color: var(--c-blue);
+                margin-top: 2px;
+                margin-bottom: 4px;
+                letter-spacing: 1px;
+            }
+            .card-body .skills-grid {
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 4px;
+            }
+            .card-body .skill {
+                background: var(--c-black);
+                color: var(--c-ltgreen);
+                padding: 2px 8px;
+                font-size: 16px;
+                text-shadow: 0 0 4px rgba(85, 255, 85, 0.5);
+                letter-spacing: 1px;
+                border: 1px solid transparent;
+            }
+            .card-body .skill::before {
+                content: "▸ ";
+                color: var(--c-yellow);
+            }
+            .card-body .skill[data-team="red"] {
+                color: var(--c-ltred);
+                text-shadow: 0 0 4px rgba(255, 85, 85, 0.5);
+                cursor: pointer;
+            }
+            .card-body .skill[data-team="red"]::before {
+                color: var(--c-ltred);
+            }
+            .card-body .skill[data-team="blue"] {
+                color: var(--c-ltcyan);
+                text-shadow: 0 0 4px rgba(85, 255, 255, 0.5);
+                cursor: pointer;
+            }
+            .card-body .skill[data-team="blue"]::before {
+                color: var(--c-ltcyan);
+            }
+            .card-body .skill[data-team]:hover {
+                border-color: currentColor;
+            }
+            /* stamps */
+            .card-body .stamps {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
+                margin-top: 6px;
+                margin-bottom: 4px;
+            }
+            .card-body .stamp {
+                font-size: 14px;
+                padding: 2px 8px;
+                letter-spacing: 2px;
+                border: 1.5px solid currentColor;
+                transform: rotate(-2deg);
+                color: var(--c-dkgray);
+                background: transparent;
+            }
+            .card-body .stamp.red {
+                color: var(--c-red);
+                transform: rotate(-3deg);
+            }
+            .card-body .stamp.blue {
+                color: var(--c-blue);
+                transform: rotate(1deg);
+            }
+            .card-body .stamp.pgp {
+                color: var(--c-brown);
+                transform: rotate(-1deg);
+            }
+            /* compact tweaks for skills */
+            .win.compact .card-body .skill {
+                font-size: 13px;
+                padding: 1px 6px;
+            }
+            .win.compact .card-body .stamp {
+                font-size: 11px;
+                padding: 1px 5px;
+            }
+            .win.compact .card-body .skills-grid {
+                gap: 3px;
+            }
+
+            /* ------------------------------------------------------------------ */
+            /*  ASCII PORTRAIT WINDOW                                             */
+            /* ------------------------------------------------------------------ */
+            .portrait-body {
+                background: var(--c-black);
+                color: var(--c-ltgreen);
+                padding: 12px 16px;
+                font-family:
+                    "Cascadia Mono", "Consolas", "DejaVu Sans Mono",
+                    "Liberation Mono", "Courier New", monospace;
+                font-size: 15px;
+                line-height: 1.05;
+                white-space: pre;
+                letter-spacing: 0;
+                text-shadow: 0 0 4px rgba(85, 255, 85, 0.5);
+                flex: 1 1 auto;
+                overflow: auto;
+                min-height: 0;
+            }
+            .portrait-body .footer {
+                color: var(--c-dkgray);
+                font-size: 14px;
+                margin-top: 8px;
+                padding-top: 8px;
+                border-top: 1px solid var(--c-dkgray);
+                text-align: center;
+            }
+
+            /* ------------------------------------------------------------------ */
+            /*  TERMINAL WINDOW                                                   */
+            /* ------------------------------------------------------------------ */
+            .term-body {
+                background: var(--c-black);
+                color: var(--c-ltgreen);
+                padding: 8px 12px 4px;
+                overflow: hidden;
+                text-shadow: 0 0 4px rgba(85, 255, 85, 0.45);
+                display: flex;
+                flex-direction: column;
+                flex: 1 1 auto;
+                width: 100%;
+                min-height: 0;
+            }
+            .term-out {
+                flex: 1;
+                overflow-y: auto;
+                overflow-x: hidden;
+                white-space: pre-wrap;
+                word-wrap: break-word;
+                font-size: 20px;
+                line-height: 1.05;
+                padding-right: 4px;
+            }
+            .term-out::-webkit-scrollbar {
+                width: 6px;
+            }
+            .term-out::-webkit-scrollbar-track {
+                background: #001100;
+            }
+            .term-out::-webkit-scrollbar-thumb {
+                background: var(--c-green);
+            }
+            .term-line {
+                white-space: pre-wrap;
+            }
+            .term-prompt {
+                color: var(--c-ltgreen);
+            }
+            .term-cmd {
+                color: var(--c-white);
+            }
+            .term-info {
+                color: var(--c-ltcyan);
+            }
+            .term-ok {
+                color: var(--c-ltgreen);
+            }
+            .term-warn {
+                color: var(--c-yellow);
+            }
+            .term-err {
+                color: var(--c-ltred);
+            }
+            .term-dim {
+                color: #2a7a2a;
+            }
+            .term-hl {
+                color: var(--c-yellow);
+            }
+            .term-link {
+                color: var(--c-ltcyan);
+                text-decoration: underline;
+                cursor: pointer;
+            }
+            .term-link:hover {
+                background: var(--c-ltcyan);
+                color: var(--c-black);
+                text-decoration: none;
+            }
+            .term-link.red {
+                color: var(--c-ltred);
+            }
+            .term-link.red:hover {
+                background: var(--c-ltred);
+                color: var(--c-black);
+            }
+            .term-link.blue {
+                color: var(--c-ltcyan);
+            }
+            .term-link.blue:hover {
+                background: var(--c-ltcyan);
+                color: var(--c-black);
+            }
+            .term-banner {
+                color: var(--c-ltgreen);
+                font-family:
+                    "Cascadia Mono", "Consolas", "DejaVu Sans Mono",
+                    "Liberation Mono", "Courier New", monospace;
+                font-size: 12px;
+                line-height: 1;
+                white-space: pre;
+                margin: 0;
+                text-shadow:
+                    0 0 6px rgba(85, 255, 85, 0.55),
+                    0 0 14px rgba(85, 255, 85, 0.25);
+            }
+            .term-input-row {
+                display: flex;
+                align-items: baseline;
+                gap: 0;
+                padding-top: 2px;
+            }
+            .term-input-wrap {
+                position: relative;
+                display: inline-block;
+                min-width: 1px;
+                margin-left: 4px;
+            }
+            .term-input-shadow {
+                visibility: hidden;
+                white-space: pre;
+                font: inherit;
+                color: transparent;
+            }
+            .term-input {
+                position: absolute;
+                inset: 0;
+                width: 100%;
+                height: 100%;
+                background: transparent;
+                border: 0;
+                outline: 0;
+                color: var(--c-white);
+                font: inherit;
+                text-shadow: inherit;
+                caret-color: transparent;
+                padding: 0;
+                margin: 0;
+            }
+            .term-cursor {
+                display: inline-block;
+                width: 10px;
+                height: 18px;
+                background: var(--c-ltgreen);
+                transform: translateY(3px);
+                animation: blink 1s steps(1) infinite;
+                box-shadow: 0 0 6px var(--c-ltgreen);
+                margin-left: 1px;
+            }
+            .term-input-row.focused .term-cursor {
+                background: var(--c-white);
+                box-shadow: 0 0 6px var(--c-white);
+            }
+
+            /* ------------------------------------------------------------------ */
+            /*  MISC                                                              */
+            /* ------------------------------------------------------------------ */
+            .hint {
+                position: absolute;
+                left: 50%;
+                transform: translateX(-50%);
+                bottom: 40px;
+                background: var(--c-yellow);
+                color: var(--c-black);
+                padding: 6px 14px 6px 14px;
+                font-size: 16px;
+                z-index: 90;
+                display: inline-flex;
+                align-items: center;
+                gap: 12px;
+                box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+                border: 1px solid var(--c-black);
+                animation: hint-in 0.35s ease-out both;
+            }
+            .hint .hint-close {
+                background: var(--c-black);
+                color: var(--c-yellow);
+                width: 18px;
+                height: 18px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 14px;
+                line-height: 1;
+                cursor: pointer;
+                user-select: none;
+            }
+            .hint .hint-close:hover {
+                background: var(--c-ltred);
+                color: var(--c-white);
+            }
+            .hint.dismiss {
+                animation: hint-out 0.35s ease-in both;
+            }
+            @keyframes hint-in {
+                0% {
+                    opacity: 0;
+                    transform: translate(-50%, 12px);
+                }
+                100% {
+                    opacity: 1;
+                    transform: translate(-50%, 0);
+                }
+            }
+            @keyframes hint-out {
+                0% {
+                    opacity: 1;
+                    transform: translate(-50%, 0);
+                }
+                100% {
+                    opacity: 0;
+                    transform: translate(-50%, 12px);
+                }
+            }
+
+            .toast {
+                position: absolute;
+                background: var(--c-yellow);
+                color: var(--c-black);
+                padding: 4px 12px;
+                font-size: 18px;
+                z-index: 200;
+                box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.5);
+                pointer-events: none;
+            }
+
+            /* matrix easter-egg overlay */
+            #matrix {
+                position: absolute;
+                inset: 0;
+                background: var(--c-black);
+                z-index: 7000;
+                display: none;
+                pointer-events: auto;
+                cursor: pointer;
+                overflow: hidden;
+            }
+            #matrix.on {
+                display: block;
+            }
+            #matrix canvas {
+                width: 100%;
+                height: 100%;
+                display: block;
+            }
+            #matrix .exit {
+                position: absolute;
+                left: 50%;
+                bottom: 24px;
+                transform: translateX(-50%);
+                color: var(--c-ltgreen);
+                background: rgba(0, 0, 0, 0.6);
+                padding: 4px 12px;
+                text-shadow: 0 0 4px #5f5;
+            }
+
+            /* small screens */
+            @media (max-width: 720px) {
+                .win {
+                    min-width: 0;
+                }
+                .term-body {
+                    width: 92vw;
+                    height: 240px;
+                }
+                .card-body {
+                    min-width: 0;
+                }
+                .card-body .name {
+                    font-size: 28px;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <div class="crt">
+            <div class="crt-screen">
+                <!-- ============== BOOT SEQUENCE ============== -->
+                <pre id="boot"></pre>
+
+                <!-- ============== DESKTOP ============== -->
+                <div id="desktop">
+                    <!-- top menu bar -->
+                    <div class="menubar">
+                        <div class="item" data-action="about"><u>≡</u></div>
+                        <div class="item" data-action="about"><u>F</u>ile</div>
+                        <div class="item" data-action="help"><u>H</u>elp</div>
+                        <div class="item" data-action="windows">
+                            <u>W</u>indows
+                        </div>
+                        <div class="clock" id="clock">--:--:--</div>
+                    </div>
+
+                    <!-- windows are injected here -->
+                    <div id="windows"></div>
+
+                    <!-- bottom status / function keys -->
+                    <div class="statusbar">
+                        <span class="fk" data-cmd="help"><b>F1</b> Help</span>
+                        <span class="fk" data-cmd="about"><b>F2</b> About</span>
+                        <span class="fk" data-cmd="contact"
+                            ><b>F3</b> Contact</span
+                        >
+                        <span class="fk" data-cmd="clear"><b>F5</b> Clear</span>
+                        <span class="fk" data-cmd="ls"><b>F6</b> Files</span>
+                        <span class="right">
+                            <span>NUM</span><span>CAPS</span><span>INS</span>
+                            <span id="mempill">640K OK</span>
+                        </span>
+                    </div>
+
+                    <!-- one-time hint -->
+                    <div class="hint" id="hint">
+                        <span
+                            >TIP — drag window titles. Type in the terminal. Try
+                            <b>help</b>.</span
+                        >
+                        <span class="hint-close" id="hint-close" title="Dismiss"
+                            >×</span
+                        >
+                    </div>
+                </div>
+
+                <!-- ============== MATRIX OVERLAY (easter egg) ============== -->
+                <div id="matrix">
+                    <canvas id="matrix-canvas"></canvas>
+                    <div class="exit">[ press ESC or click to exit ]</div>
+                </div>
+
+                <div class="crt-flicker"></div>
+                <div class="crt-scanlines"></div>
+                <div class="crt-vignette"></div>
+                <div class="crt-bezel"></div>
+            </div>
+        </div>
+
+        <script>
+            /* ====================================================================
+             *  SINGULARITY.SYS — CONTACT TERMINAL
+             *  Single-file vanilla JS. No build step. No frameworks.
+             * ==================================================================== */
+
+            const $ = (s, r = document) => r.querySelector(s);
+            const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+
+            /* ----------------------------- SOUND ------------------------------- */
+            const Sound = (() => {
+                let ctx = null,
+                    master = null,
+                    muted = false;
+                function ensure() {
+                    if (ctx) return;
+                    try {
+                        ctx = new (
+                            window.AudioContext || window.webkitAudioContext
+                        )();
+                        master = ctx.createGain();
+                        master.gain.value = 0.06;
+                        master.connect(ctx.destination);
+                    } catch (e) {
+                        ctx = null;
+                    }
+                }
+                function beep(
+                    freq = 440,
+                    dur = 0.05,
+                    type = "square",
+                    vol = 1,
+                ) {
+                    if (muted) return;
+                    ensure();
+                    if (!ctx) return;
+                    const o = ctx.createOscillator();
+                    const g = ctx.createGain();
+                    o.type = type;
+                    o.frequency.value = freq;
+                    g.gain.value = 0;
+                    o.connect(g).connect(master);
+                    const t = ctx.currentTime;
+                    g.gain.setValueAtTime(0, t);
+                    g.gain.linearRampToValueAtTime(vol, t + 0.005);
+                    g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+                    o.start(t);
+                    o.stop(t + dur + 0.02);
+                }
+                return {
+                    init: ensure,
+                    key: () =>
+                        beep(1600 + Math.random() * 400, 0.018, "square", 0.6),
+                    click: () => beep(900, 0.025, "square", 0.8),
+                    ok: () => {
+                        beep(880, 0.08, "square", 1);
+                        setTimeout(() => beep(1320, 0.1, "square", 1), 70);
+                    },
+                    err: () => {
+                        beep(180, 0.18, "sawtooth", 1);
+                    },
+                    boot: () => {
+                        beep(440, 0.08);
+                        setTimeout(() => beep(660, 0.08), 100);
+                        setTimeout(() => beep(880, 0.12), 200);
+                    },
+                    toggleMute() {
+                        muted = !muted;
+                        return muted;
+                    },
+                    isMuted() {
+                        return muted;
+                    },
+                };
+            })();
+
+            /* user-gesture unlock */
+            window.addEventListener("pointerdown", () => Sound.init(), {
+                once: true,
+            });
+            window.addEventListener("keydown", () => Sound.init(), {
+                once: true,
+            });
+
+            /* ----------------------------- CLOCK ------------------------------- */
+            function tickClock() {
+                const d = new Date();
+                const p = (n) => String(n).padStart(2, "0");
+                $("#clock").textContent =
+                    `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+            }
+            setInterval(tickClock, 1000);
+            tickClock();
+
+            /* ----------------------------- BOOT -------------------------------- */
+            const LOGO_ASCII = ` ░▒▓███████▓▒░▒▓█▓▒░▒▓███████▓▒░ ░▒▓██████▓▒░░▒▓█▓▒░░▒▓█▓▒░
+░▒▓█▓▒░      ░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░
+░▒▓█▓▒░      ░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░
+ ░▒▓██████▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒▒▓███▓▒░▒▓█▓▒░░▒▓█▓▒░
+       ░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░
+       ░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░
+░▒▓███████▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░░▒▓██████▓▒░ ░▒▓██████▓▒░`;
+
+            const BOOT_LINES = [
+                ["SINGULARITY BIOS v2.6.1986", "hi"],
+                ["Copyright (C) 1986-2026 Singularity Systems, Ltd.", "dim"],
+                ["", ""],
+                [
+                    "CPU      : Z80-A @ 4.77 MHz ........................ ",
+                    "ok",
+                    "OK",
+                ],
+                [
+                    "Memory   : 640K base / 384K extended ................ ",
+                    "ok",
+                    "OK",
+                ],
+                [
+                    "Cache    : L1 16K  /  L2 64K ........................ ",
+                    "ok",
+                    "OK",
+                ],
+                [
+                    'Floppy A : 5.25" 360K ............................... ',
+                    "ok",
+                    "OK",
+                ],
+                [
+                    'Floppy B : 3.50" 1.44M ............................... ',
+                    "ok",
+                    "OK",
+                ],
+                [
+                    "Drive C  : 20MB MFM ................................. ",
+                    "ok",
+                    "OK",
+                ],
+                [
+                    "VGA      : 640x480 16-color ......................... ",
+                    "ok",
+                    "OK",
+                ],
+                [
+                    "Keyboard : 84-key XT ................................ ",
+                    "ok",
+                    "OK",
+                ],
+                [
+                    "Network  : LAN 10base2 .............................. ",
+                    "warn",
+                    "LINK",
+                ],
+                ["", ""],
+                ["Loading MS-DOS 5.0 ...", "dim"],
+                ["HIMEM.SYS........installed", "dim"],
+                ["ANSI.SYS........loaded", "dim"],
+                ["MOUSE.COM.......installed (1 device)", "dim"],
+                ["", ""],
+                ["Starting SINGULARITY.SYS ...", "hi"],
+                ["  > module: SYSTEM_ARCHITECT   ........... ", "ok", "READY"],
+                ["  > module: SECURITY_OPERATIONS ........... ", "ok", "READY"],
+                ["  > module: CONTACT_PROTOCOL    ........... ", "ok", "READY"],
+                ["", ""],
+                ["Boot complete. Launching shell ...", "hi"],
+            ];
+
+            function bootSequence() {
+                const el = $("#boot");
+                // Render BIOS logo banner immediately
+                const logo = document.createElement("div");
+                logo.className = "logo";
+                logo.textContent = LOGO_ASCII;
+                el.appendChild(logo);
+                const sub = document.createElement("div");
+                sub.className = "logo-sub";
+                sub.textContent = "S Y S T E M   A R C H I T E C T";
+                el.appendChild(sub);
+                let i = 0;
+                function writeOne() {
+                    if (i >= BOOT_LINES.length) {
+                        finishBoot();
+                        return;
+                    }
+                    const [text, cls, tail] = BOOT_LINES[i++];
+                    const line = document.createElement("span");
+                    line.className = cls || "";
+                    line.textContent = text;
+                    el.appendChild(line);
+                    if (tail) {
+                        const t = document.createElement("span");
+                        const tcls =
+                            tail === "OK"
+                                ? "ok"
+                                : tail === "LINK"
+                                  ? "warn"
+                                  : "ok";
+                        t.className = tcls;
+                        t.textContent = "[ " + tail + " ]";
+                        el.appendChild(t);
+                    }
+                    el.appendChild(document.createTextNode("\n"));
+                    if (text && Math.random() < 0.6) Sound.key();
+                    const delay = text === "" ? 80 : 60 + Math.random() * 80;
+                    setTimeout(writeOne, delay);
+                }
+                function finishBoot() {
+                    const cur = document.createElement("span");
+                    cur.className = "cur";
+                    el.appendChild(cur);
+                    Sound.boot();
+                    setTimeout(() => {
+                        el.style.transition = "opacity .35s";
+                        el.style.opacity = "0";
+                        $("#desktop").classList.add("on");
+                        setTimeout(() => {
+                            el.remove();
+                        }, 400);
+                        buildDesktop();
+                    }, 700);
+                }
+                writeOne();
+            }
+
+            /* --------------------------- WINDOW MGR ---------------------------- */
+            let zCounter = 50;
+            const windowsRoot = () => $("#windows");
+            const wins = new Map(); // id -> { el, cfg }
+
+            function createWindow(cfg) {
+                // cfg: { id, title, x, y, w, h, bodyHTML, kind, closable=true, flush, minW, minH }
+                const el = document.createElement("div");
+                el.className = "win";
+                el.dataset.id = cfg.id;
+                el.style.left = cfg.x + "px";
+                el.style.top = cfg.y + "px";
+                if (cfg.w) el.style.width = cfg.w + "px";
+                if (cfg.h) el.style.height = cfg.h + "px";
+
+                const tbar = document.createElement("div");
+                tbar.className = "tbar";
+                const close = document.createElement("div");
+                close.className = "btn-close";
+                close.textContent = "×";
+                close.title = "Close";
+                if (cfg.closable === false) close.style.visibility = "hidden";
+                const title = document.createElement("div");
+                title.className = "title";
+                title.textContent = "═  " + cfg.title + "  ═";
+                tbar.append(close, title);
+
+                const body = document.createElement("div");
+                body.className = "body " + (cfg.bodyClass || "");
+                if (cfg.flush) body.classList.add("flush");
+                body.innerHTML = cfg.bodyHTML || "";
+
+                const rsz = document.createElement("div");
+                rsz.className = "rsz";
+                rsz.title = "Drag to resize";
+
+                el.append(tbar, body, rsz);
+                windowsRoot().appendChild(el);
+
+                el.addEventListener("pointerdown", () => focusWindow(cfg.id));
+                close.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    Sound.click();
+                    closeWindow(cfg.id);
+                });
+
+                makeDraggable(el, tbar);
+                makeResizable(el, rsz, cfg.minW || 240, cfg.minH || 120);
+
+                wins.set(cfg.id, { el, cfg });
+                focusWindow(cfg.id);
+                return { el, body };
+            }
+
+            function makeResizable(el, handle, minW, minH) {
+                let sx,
+                    sy,
+                    ow,
+                    oh,
+                    resizing = false;
+                handle.addEventListener("pointerdown", (e) => {
+                    e.stopPropagation();
+                    resizing = true;
+                    sx = e.clientX;
+                    sy = e.clientY;
+                    ow = el.offsetWidth;
+                    oh = el.offsetHeight;
+                    handle.setPointerCapture(e.pointerId);
+                    focusWindow(el.dataset.id);
+                });
+                handle.addEventListener("pointermove", (e) => {
+                    if (!resizing) return;
+                    const maxW = window.innerWidth - el.offsetLeft - 8;
+                    const maxH = window.innerHeight - el.offsetTop - 32;
+                    const nw = Math.max(
+                        minW,
+                        Math.min(maxW, ow + (e.clientX - sx)),
+                    );
+                    const nh = Math.max(
+                        minH,
+                        Math.min(maxH, oh + (e.clientY - sy)),
+                    );
+                    el.style.width = nw + "px";
+                    el.style.height = nh + "px";
+                });
+                handle.addEventListener("pointerup", (e) => {
+                    if (resizing) Sound.click();
+                    resizing = false;
+                    try {
+                        handle.releasePointerCapture(e.pointerId);
+                    } catch (_) {}
+                });
+            }
+
+            function focusWindow(id) {
+                const w = wins.get(id);
+                if (!w) return;
+                $$(".win").forEach((x) => x.classList.remove("focused"));
+                w.el.classList.add("focused");
+                w.el.style.zIndex = ++zCounter;
+                if (id === "term") {
+                    const inp = $(".term-input", w.el);
+                    if (inp) inp.focus();
+                }
+            }
+
+            function closeWindow(id) {
+                const w = wins.get(id);
+                if (!w) return;
+                if (id === "portrait") stopPortraitAnim();
+                w.el.remove();
+                wins.delete(id);
+            }
+
+            function ensureWindow(id, factory) {
+                if (wins.has(id)) {
+                    focusWindow(id);
+                    return wins.get(id);
+                }
+                return factory();
+            }
+
+            function makeDraggable(el, handle) {
+                let sx,
+                    sy,
+                    ox,
+                    oy,
+                    dragging = false;
+                handle.addEventListener("pointerdown", (e) => {
+                    if (e.target.classList.contains("btn-close")) return;
+                    dragging = true;
+                    sx = e.clientX;
+                    sy = e.clientY;
+                    ox = el.offsetLeft;
+                    oy = el.offsetTop;
+                    handle.setPointerCapture(e.pointerId);
+                });
+                handle.addEventListener("pointermove", (e) => {
+                    if (!dragging) return;
+                    const nx = Math.max(
+                        0,
+                        Math.min(window.innerWidth - 60, ox + (e.clientX - sx)),
+                    );
+                    const ny = Math.max(
+                        26,
+                        Math.min(
+                            window.innerHeight - 60,
+                            oy + (e.clientY - sy),
+                        ),
+                    );
+                    el.style.left = nx + "px";
+                    el.style.top = ny + "px";
+                });
+                handle.addEventListener("pointerup", (e) => {
+                    if (dragging) Sound.click();
+                    dragging = false;
+                    try {
+                        handle.releasePointerCapture(e.pointerId);
+                    } catch (_) {}
+                });
+            }
+
+            /* --------------------- DESKTOP BUILD ------------------------------- */
+            function buildDesktop() {
+                openContactCard();
+                if (LAYOUT.showPortrait) openPortrait();
+                openTerminal();
+            }
+
+            /* ----------------- responsive default layout ----------------------- */
+            function computeLayout() {
+                const W = Math.max(640, window.innerWidth);
+                const H = Math.max(440, window.innerHeight);
+                const topBar = 30,
+                    botBar = 26,
+                    pad = 14,
+                    gap = 10;
+
+                // tight viewport → compact card + portrait at top, terminal as full-width strip below
+                const tight = H < 760 || W < 1040;
+
+                if (tight) {
+                    const portraitW = 268;
+                    const showPortrait = W > 820;
+                    const cardW = showPortrait
+                        ? Math.max(320, Math.min(460, W - portraitW - pad * 3))
+                        : Math.min(560, W - pad * 2);
+
+                    // give terminal at least ~46% of vertical space, min 260px so prompt + several lines fit
+                    const minTermH = 260;
+                    const availH = H - topBar - botBar - pad * 2 - gap;
+                    const termH = Math.max(minTermH, Math.floor(availH * 0.46));
+
+                    // top row gets whatever's left after the terminal
+                    const topRowH = availH - termH;
+                    const topY = topBar + 8;
+                    const termY = topY + topRowH + gap;
+                    const termW = W - pad * 2;
+
+                    return {
+                        compact: true,
+                        showPortrait,
+                        card: { x: pad, y: topY, w: cardW, h: topRowH },
+                        portrait: {
+                            x: W - portraitW - pad,
+                            y: topY,
+                            w: portraitW,
+                            h: topRowH,
+                        },
+                        term: { x: pad, y: termY, w: termW, h: termH },
+                    };
+                }
+
+                // roomy viewport → card + portrait top, terminal as wide bottom strip
+                const portraitW = 308;
+                const cardW = Math.min(500, W - portraitW - pad * 3);
+                const topY = topBar + 20;
+                const termW = Math.min(820, W - pad * 2);
+                const termH = Math.max(
+                    300,
+                    Math.floor((H - topBar - botBar) * 0.42),
+                );
+                const termY = H - botBar - pad - termH;
+                const topRowH = termY - topY - gap;
+
+                return {
+                    compact: false,
+                    showPortrait: true,
+                    card: { x: pad, y: topY, w: cardW, h: topRowH },
+                    portrait: {
+                        x: W - portraitW - pad,
+                        y: topY,
+                        w: portraitW,
+                        h: topRowH,
+                    },
+                    term: { x: pad, y: termY, w: termW, h: termH },
+                };
+            }
+            let LAYOUT = computeLayout();
+
+            function openContactCard() {
+                return ensureWindow("card", () => {
+                    const html = `
+      <div class="card-body">
+        <div class="name">SINGULARITY<span class="blink">_</span></div>
+        <div class="tag">SYSTEM ARCHITECT // SECURITY OPERATIONS</div>
+        <hr />
+        <div class="row"><div class="lbl">Handle</div><div class="val">singularity</div></div>
+        <div class="row"><div class="lbl">Status</div><div class="val"><span class="status-dot"></span>online · accepting transmissions</div></div>
+        <div class="row"><div class="lbl">Motto</div><div class="val tryharder">&gt; TRY HARDER</div></div>
+        <hr />
+        <div class="lbl skills-hdr">// SKILLSET</div>
+        <div class="skills-grid">
+          <div class="skill" data-team="red">Red Team</div>
+          <div class="skill" data-team="blue">Blue Team</div>
+          <div class="skill">Security</div>
+          <div class="skill">DevSecOps</div>
+          <div class="skill">Infrastructure</div>
+          <div class="skill">Networking</div>
+          <div class="skill">Operations</div>
+          <div class="skill">Architecture</div>
+          <div class="skill">Engineering</div>
+          <div class="skill">Intelligence</div>
+        </div>
+        <hr />
+        <div class="row"><div class="lbl">Github</div><div class="val"><a data-link="github">[ github.com/singudotdev ]</a></div></div>
+        <div class="row"><div class="lbl">E-mail</div><div class="val"><a data-link="email">[ contact@singu.dev ]</a></div></div>
+        <div class="row"><div class="lbl">PGP key</div><div class="val">0xF1NG3RPR1NT · sig verified</div></div>
+        <div class="stamps">
+          <span class="stamp red">RED TEAM</span>
+          <span class="stamp blue">BLUE TEAM</span>
+          <span class="stamp pgp">PGP SIGNED</span>
+        </div>
+        <div class="meta">SIGNED: SINGULARITY.SYS · LAST SYNC ${new Date().toISOString().slice(0, 10)}</div>
+      </div>`;
+                    const { body } = createWindow({
+                        id: "card",
+                        title: "CONTACT.CARD",
+                        x: LAYOUT.card.x,
+                        y: LAYOUT.card.y,
+                        w: LAYOUT.card.w,
+                        h: LAYOUT.card.h,
+                        bodyHTML: html,
+                        bodyClass: "card",
+                        minW: 320,
+                        minH: 240,
+                    });
+                    if (LAYOUT.compact)
+                        wins.get("card").el.classList.add("compact");
+                    body.addEventListener("click", (e) => {
+                        const a = e.target.closest("[data-link]");
+                        if (a) {
+                            Sound.ok();
+                            const link = a.dataset.link;
+                            if (link === "github") runCommand("github");
+                            else if (link === "email") runCommand("email");
+                            return;
+                        }
+                        const skill = e.target.closest(".skill[data-team]");
+                        if (skill) {
+                            Sound.click();
+                            runCommand(
+                                skill.dataset.team === "red"
+                                    ? "redteam"
+                                    : "blueteam",
+                            );
+                        }
+                    });
+                    return wins.get("card");
+                });
+            }
+
+            const PORTRAIT_BASE = [
+                `      ░▒▓██████████▓▒░    `,
+                `    ░▒▓██████████████▓▒░  `,
+                `   ▒▓██░░░░░░░░░░░░░░██▓▒ `,
+                `  ░▓█░                ░█▓░`,
+                `  ▓█░                  ░█▓`,
+                `  ▓█░   ▓▓▓      ▓▓▓   ░█▓`,
+                `  ▓█░   ▓▓▓      ▓▓▓   ░█▓`,
+                `  ▓█░                  ░█▓`,
+                `  ▓█░      ░░░░░░      ░█▓`,
+                `  ▓█░     ░░░░░░░░     ░█▓`,
+                `  ▓█░                  ░█▓`,
+                `  ░▓█░                ░█▓░`,
+                `   ▒▓██░░░░░░░░░░░░░░██▓▒ `,
+                `    ░▒▓██████████████▓▒░  `,
+                `      ░▒▓██████████▓▒░    `,
+                `                          `,
+                `   ░▒▓  SINGULARITY  ▓▒░  `,
+                `       0xS1NGUL4R1TY      `,
+            ];
+            const EYE_OPEN = `  ▓█░   ▓▓▓      ▓▓▓   ░█▓`;
+            const EYE_HALF = `  ▓█░   ▀▀▀      ▀▀▀   ░█▓`;
+            const EYE_CLOSE = `  ▓█░   ───      ───   ░█▓`;
+            const EYE_LEFT = `  ▓█░   ▓▓░      ▓▓░   ░█▓`;
+            const EYE_RIGHT = `  ▓█░   ░▓▓      ░▓▓   ░█▓`;
+            const ASCII_PORTRAIT = PORTRAIT_BASE.join("\n");
+
+            function openPortrait() {
+                return ensureWindow("portrait", () => {
+                    const html = `<div class="portrait-body" id="portrait-content"><div class="portrait-ascii" id="portrait-ascii">${escapeHtml(ASCII_PORTRAIT)}</div><div class="footer">[ OPERATOR // SECURITY OPS ]</div></div>`;
+                    createWindow({
+                        id: "portrait",
+                        title: "PORTRAIT.ASC",
+                        x: LAYOUT.portrait.x,
+                        y: LAYOUT.portrait.y,
+                        w: LAYOUT.portrait.w,
+                        h: LAYOUT.portrait.h,
+                        bodyHTML: html,
+                        flush: true,
+                        minW: 220,
+                        minH: 200,
+                    });
+                    if (LAYOUT.compact)
+                        wins.get("portrait").el.classList.add("compact");
+                    startPortraitAnim();
+                    return wins.get("portrait");
+                });
+            }
+
+            /* --------------------------- PORTRAIT ANIM ------------------------- */
+            function renderPortraitFrame(lines) {
+                const el = document.getElementById("portrait-ascii");
+                if (el) el.textContent = lines.join("\n");
+            }
+            function withEyes(state) {
+                const lines = [...PORTRAIT_BASE];
+                let v = EYE_OPEN;
+                if (state === "half") v = EYE_HALF;
+                if (state === "close") v = EYE_CLOSE;
+                if (state === "left") v = EYE_LEFT;
+                if (state === "right") v = EYE_RIGHT;
+                lines[5] = v;
+                lines[6] = v;
+                return lines;
+            }
+
+            let portraitTimer = null;
+            function startPortraitAnim() {
+                stopPortraitAnim();
+                const blink = async () => {
+                    if (!document.getElementById("portrait-ascii")) return;
+                    renderPortraitFrame(withEyes("half"));
+                    await sleep(45);
+                    renderPortraitFrame(withEyes("close"));
+                    await sleep(110);
+                    renderPortraitFrame(withEyes("half"));
+                    await sleep(45);
+                    renderPortraitFrame(PORTRAIT_BASE);
+                };
+                const doubleBlink = async () => {
+                    await blink();
+                    await sleep(140);
+                    await blink();
+                };
+                const lookAround = async () => {
+                    if (!document.getElementById("portrait-ascii")) return;
+                    renderPortraitFrame(withEyes("left"));
+                    await sleep(380);
+                    renderPortraitFrame(withEyes("right"));
+                    await sleep(380);
+                    renderPortraitFrame(withEyes("left"));
+                    await sleep(280);
+                    renderPortraitFrame(PORTRAIT_BASE);
+                };
+                const glitch = async () => {
+                    if (!document.getElementById("portrait-ascii")) return;
+                    const lines = PORTRAIT_BASE.map((l) => l.split(""));
+                    const N = 6 + Math.floor(Math.random() * 10);
+                    const pool = ["░", "▒", "▓", "█", "▀", "▄"];
+                    for (let k = 0; k < N; k++) {
+                        const r = Math.floor(Math.random() * lines.length);
+                        const row = lines[r];
+                        if (!row.length) continue;
+                        const c = Math.floor(Math.random() * row.length);
+                        row[c] = pool[Math.floor(Math.random() * pool.length)];
+                    }
+                    renderPortraitFrame(lines.map((l) => l.join("")));
+                    await sleep(60);
+                    // brief stutter
+                    if (Math.random() < 0.5) {
+                        const lines2 = PORTRAIT_BASE.map((l) => l.split(""));
+                        for (let k = 0; k < 6; k++) {
+                            const r = Math.floor(Math.random() * lines2.length);
+                            const row = lines2[r];
+                            if (!row.length) continue;
+                            const c = Math.floor(Math.random() * row.length);
+                            row[c] =
+                                pool[Math.floor(Math.random() * pool.length)];
+                        }
+                        renderPortraitFrame(lines2.map((l) => l.join("")));
+                        await sleep(50);
+                    }
+                    renderPortraitFrame(PORTRAIT_BASE);
+                };
+
+                const tick = () => {
+                    if (!document.getElementById("portrait-ascii")) {
+                        stopPortraitAnim();
+                        return;
+                    }
+                    const r = Math.random();
+                    if (r < 0.62) blink();
+                    else if (r < 0.78) doubleBlink();
+                    else if (r < 0.92) lookAround();
+                    else glitch();
+                    portraitTimer = setTimeout(
+                        tick,
+                        1800 + Math.random() * 3200,
+                    );
+                };
+                portraitTimer = setTimeout(tick, 1600);
+            }
+            function stopPortraitAnim() {
+                if (portraitTimer) clearTimeout(portraitTimer);
+                portraitTimer = null;
+            }
+
+            function openTerminal() {
+                return ensureWindow("term", () => {
+                    const html = `
+      <div class="term-body">
+        <div class="term-out" id="term-out"></div>
+        <div class="term-input-row focused" id="term-row">
+          <span class="term-prompt">C:\\&gt;</span>
+          <span class="term-input-wrap"><span class="term-input-shadow" id="term-shadow"></span><input class="term-input" id="term-input" autocomplete="off" spellcheck="false" autocapitalize="off" /></span>
+          <span class="term-cursor" id="term-cursor"></span>
+        </div>
+      </div>`;
+                    const { body } = createWindow({
+                        id: "term",
+                        title: "TERMINAL.EXE",
+                        x: LAYOUT.term.x,
+                        y: LAYOUT.term.y,
+                        w: LAYOUT.term.w,
+                        h: LAYOUT.term.h,
+                        bodyHTML: html,
+                        flush: true,
+                        minW: 320,
+                        minH: 160,
+                    });
+
+                    const input = $(".term-input", body);
+                    const row = $(".term-input-row", body);
+                    const shadow = $(".term-input-shadow", body);
+
+                    const syncShadow = () => {
+                        // mirror the typed value so the wrapper sizes to fit
+                        shadow.textContent = input.value || "";
+                    };
+
+                    // greet
+                    termPrint("SINGULARITY shell · type ", "info", false);
+                    termPrint("help", "hl", false);
+                    termPrint(" for available commands.", "info", true);
+                    termPrint("", "", true);
+
+                    input.addEventListener("input", () => {
+                        Sound.key();
+                        syncShadow();
+                    });
+                    input.addEventListener("keydown", (e) => {
+                        if (e.key === "Enter") {
+                            const v = input.value;
+                            input.value = "";
+                            syncShadow();
+                            runCommand(v);
+                        } else if (e.key === "ArrowUp") {
+                            e.preventDefault();
+                            const c = histPrev();
+                            if (c !== null) {
+                                input.value = c;
+                                syncShadow();
+                            }
+                        } else if (e.key === "ArrowDown") {
+                            e.preventDefault();
+                            const c = histNext();
+                            input.value = c || "";
+                            syncShadow();
+                        } else if (e.key === "Tab") {
+                            e.preventDefault();
+                            const m = autoComplete(input.value);
+                            if (m) {
+                                input.value = m;
+                                syncShadow();
+                                Sound.click();
+                            }
+                        } else if (e.key === "l" && e.ctrlKey) {
+                            e.preventDefault();
+                            clearTerm();
+                        }
+                    });
+                    input.addEventListener("focus", () =>
+                        row.classList.add("focused"),
+                    );
+                    input.addEventListener("blur", () =>
+                        row.classList.remove("focused"),
+                    );
+
+                    setTimeout(() => input.focus(), 50);
+                    syncShadow();
+
+                    // click anywhere in the terminal → focus the input (so the user can type)
+                    // also handles delegated clicks for [data-cmd] topic links
+                    body.addEventListener("click", (e) => {
+                        // let the resize handle / close button do their thing
+                        if (
+                            e.target.closest(".rsz") ||
+                            e.target.closest(".btn-close")
+                        )
+                            return;
+                        // if user is selecting text, don't steal focus
+                        const sel =
+                            window.getSelection &&
+                            window.getSelection().toString();
+                        if (sel) return;
+                        const link = e.target.closest("[data-cmd]");
+                        if (link) {
+                            Sound.click();
+                            input.focus();
+                            runCommand(link.dataset.cmd);
+                            return;
+                        }
+                        input.focus();
+                    });
+
+                    return wins.get("term");
+                });
+            }
+
+            function escapeHtml(s) {
+                return s.replace(
+                    /[&<>"']/g,
+                    (c) =>
+                        ({
+                            "&": "&amp;",
+                            "<": "&lt;",
+                            ">": "&gt;",
+                            '"': "&quot;",
+                            "'": "&#39;",
+                        })[c],
+                );
+            }
+
+            /* --------------------- TERMINAL: PRINT + HISTORY ------------------- */
+            function termOut() {
+                return $("#term-out");
+            }
+
+            function termPrint(text, cls = "", newline = true) {
+                const out = termOut();
+                if (!out) return;
+                const span = document.createElement("span");
+                if (cls) span.className = "term-" + cls;
+                span.textContent = text;
+                out.appendChild(span);
+                if (newline) out.appendChild(document.createElement("br"));
+                out.scrollTop = out.scrollHeight;
+            }
+
+            function termHtml(html) {
+                const out = termOut();
+                if (!out) return;
+                const wrap = document.createElement("div");
+                wrap.innerHTML = html;
+                out.appendChild(wrap);
+                out.scrollTop = out.scrollHeight;
+            }
+
+            function clearTerm() {
+                const o = termOut();
+                if (o) o.innerHTML = "";
+            }
+
+            const history = [];
+            let histIdx = -1;
+            function histPush(s) {
+                history.push(s);
+                histIdx = history.length;
+            }
+            function histPrev() {
+                if (!history.length) return null;
+                histIdx = Math.max(0, histIdx - 1);
+                return history[histIdx];
+            }
+            function histNext() {
+                if (!history.length) return "";
+                histIdx = Math.min(history.length, histIdx + 1);
+                return history[histIdx] || "";
+            }
+
+            /* --------------------- COMMAND PROCESSOR --------------------------- */
+            const COMMANDS = {
+                help: { desc: "list available commands", fn: cmdHelp },
+                about: { desc: "who is singularity", fn: cmdAbout },
+                whoami: {
+                    desc: "current operator",
+                    fn: () =>
+                        termPrint(
+                            "singu@localhost   [ root, wheel, ops ]",
+                            "ok",
+                        ),
+                },
+                contact: { desc: "how to reach", fn: cmdContact },
+                github: {
+                    desc: "open github profile",
+                    fn: () =>
+                        openLink(
+                            "https://github.com/singudotdev",
+                            "github.com/singudotdev",
+                        ),
+                },
+                email: {
+                    desc: "open email client",
+                    fn: () =>
+                        openLink(
+                            "mailto:contact@singu.dev",
+                            "contact@singu.dev",
+                            true,
+                        ),
+                },
+                pgp: { desc: "display public key fingerprint", fn: cmdPgp },
+                ls: { desc: "list files", fn: cmdLs },
+                dir: { desc: "(alias of ls)", fn: cmdLs, hidden: true },
+                cat: { desc: "print file contents (cat <file>)", fn: cmdCat },
+                type: { desc: "(alias of cat)", fn: cmdCat, hidden: true },
+                date: {
+                    desc: "show date/time",
+                    fn: () => termPrint(new Date().toString(), "info"),
+                },
+                uname: {
+                    desc: "system identification",
+                    fn: () =>
+                        termPrint(
+                            "SINGULARITY.SYS 2.6.1986 i386 / VGA 640x480 / 640K base",
+                            "info",
+                        ),
+                },
+                ver: {
+                    desc: "version",
+                    fn: () =>
+                        termPrint(
+                            "Singularity Shell v2.6.1986 (build 0xC0FFEE)",
+                            "info",
+                        ),
+                },
+                echo: {
+                    desc: "echo arguments",
+                    fn: (a) => termPrint(a.join(" "), ""),
+                },
+                clear: { desc: "clear the screen", fn: clearTerm },
+                cls: { desc: "(alias of clear)", fn: clearTerm, hidden: true },
+                exit: {
+                    desc: "close the terminal",
+                    fn: () => closeWindow("term"),
+                },
+                card: { desc: "open contact card", fn: openContactCard },
+                portrait: { desc: "open ASCII portrait", fn: openPortrait },
+                mute: {
+                    desc: "toggle sound",
+                    fn: () => {
+                        const m = Sound.toggleMute();
+                        termPrint(m ? "sound muted." : "sound on.", "warn");
+                        if (!m) Sound.ok();
+                    },
+                },
+                sudo: { desc: "(try it)", fn: cmdSudo, hidden: true },
+                matrix: {
+                    desc: "enter the matrix",
+                    fn: cmdMatrix,
+                    hidden: true,
+                },
+                hack: { desc: "gain root access", fn: cmdHack, hidden: true },
+                coffee: { desc: "brew coffee", fn: cmdCoffee, hidden: true },
+                singularity: { desc: "???", fn: cmdSingularity, hidden: true },
+                cowsay: { desc: "???", fn: cmdCowsay, hidden: true },
+                fortune: { desc: "???", fn: cmdFortune, hidden: true },
+                beep: { desc: "???", fn: () => Sound.ok(), hidden: true },
+                tryharder: { desc: "???", fn: cmdTryHarder, hidden: true },
+                redteam: { desc: "???", fn: cmdRedTeam, hidden: true },
+                blueteam: { desc: "???", fn: cmdBlueTeam, hidden: true },
+                oscp: { desc: "???", fn: cmdTryHarder, hidden: true },
+            };
+
+            function runCommand(raw) {
+                const line = (raw ?? "").trim();
+                // echo the command to the term
+                termHtml(
+                    `<span class="term-prompt">C:\\&gt;</span> <span class="term-cmd">${escapeHtml(line)}</span>`,
+                );
+                if (!line) return;
+                histPush(line);
+                Sound.click();
+
+                const [name, ...args] = tokenize(line);
+                const key = name.toLowerCase();
+                const cmd = COMMANDS[key];
+                if (!cmd) {
+                    termPrint(`Bad command or file name: '${name}'`, "err");
+                    Sound.err();
+                    return;
+                }
+                try {
+                    cmd.fn(args);
+                } catch (e) {
+                    termPrint("ERR: " + e.message, "err");
+                    Sound.err();
+                }
+            }
+
+            function tokenize(s) {
+                return (
+                    s
+                        .match(/(?:[^\s"]+|"[^"]*")+/g)
+                        ?.map((t) => t.replace(/^"|"$/g, "")) || []
+                );
+            }
+
+            function autoComplete(s) {
+                if (!s) return null;
+                const names = Object.keys(COMMANDS).filter(
+                    (k) => !COMMANDS[k].hidden,
+                );
+                const m = names.filter((n) => n.startsWith(s.toLowerCase()));
+                if (m.length === 1) return m[0];
+                if (m.length > 1) {
+                    termPrint(m.join("   "), "dim");
+                    return null;
+                }
+                return null;
+            }
+
+            /* --------------------- COMMAND IMPLS ------------------------------- */
+            function cmdHelp() {
+                termPrint("AVAILABLE COMMANDS", "hl");
+                termPrint("──────────────────", "dim");
+                const entries = Object.entries(COMMANDS).filter(
+                    ([, v]) => !v.hidden,
+                );
+                const maxN = Math.max(...entries.map(([k]) => k.length));
+                for (const [k, v] of entries) {
+                    const pad = " ".repeat(maxN - k.length + 3);
+                    termHtml(
+                        `  <span class="term-hl">${k}</span>${pad}<span class="term-info">${v.desc}</span>`,
+                    );
+                }
+                termPrint("", "");
+                termPrint(
+                    "TIP: Tab completes. ↑/↓ recall history. Ctrl+L clears.",
+                    "dim",
+                );
+                termPrint("TIP: some commands are not listed. explore.", "dim");
+            }
+
+            function cmdAbout() {
+                termPrint("SINGULARITY", "hl");
+                termPrint("System Architect · Security Operations", "info");
+                termPrint("", "");
+
+                const areas = [
+                    {
+                        hdr: "INFRASTRUCTURE",
+                        lines: [
+                            "Design, deployment, and lifecycle management of compute,",
+                            "storage, and platform services across cloud, on-premises,",
+                            "and hybrid environments.",
+                        ],
+                    },
+                    {
+                        hdr: "NETWORKING",
+                        lines: [
+                            "Architecture and operation of routing, segmentation,",
+                            "connectivity, and DNS, with emphasis on reliability,",
+                            "observability, and secure traffic flow.",
+                        ],
+                    },
+                    {
+                        hdr: "OPERATIONS",
+                        lines: [
+                            "Day-two reliability practices: monitoring, alerting,",
+                            "incident response, capacity planning, and continuous",
+                            "improvement of service quality.",
+                        ],
+                    },
+                    {
+                        hdr: "DEVSECOPS",
+                        lines: [
+                            "Integration of security controls into the software",
+                            "delivery lifecycle, including pipeline hardening,",
+                            "policy as code, and supply-chain integrity.",
+                        ],
+                    },
+                    {
+                        hdr: "SECURITY",
+                        lines: [
+                            "Protection of data, identity, and systems through",
+                            "layered controls covering cryptography, access",
+                            "management, and incident response.",
+                        ],
+                    },
+                    {
+                        hdr: "RED TEAM",
+                        lines: [
+                            "Adversary emulation and offensive security testing",
+                            "to validate detection, response capability, and",
+                            "overall organizational resilience.",
+                        ],
+                    },
+                    {
+                        hdr: "BLUE TEAM",
+                        lines: [
+                            "Defensive security operations covering detection,",
+                            "monitoring, incident response, and recovery across",
+                            "endpoints, networks, identity, and cloud environments.",
+                        ],
+                    },
+                    {
+                        hdr: "ARCHITECTURE",
+                        lines: [
+                            "System and security architecture spanning requirements,",
+                            "design decisions, trade-off analysis, and long-term",
+                            "evolution of complex platforms.",
+                        ],
+                    },
+                    {
+                        hdr: "INTELLIGENCE",
+                        lines: [
+                            "Collection, analysis, and dissemination of threat and",
+                            "operational intelligence to inform risk decisions and",
+                            "defensive priorities.",
+                        ],
+                    },
+                    {
+                        hdr: "ENGINEERING",
+                        lines: [
+                            "Software engineering focused on automation, tooling,",
+                            "and platform components that support secure and",
+                            "reliable operations at scale.",
+                        ],
+                    },
+                ];
+
+                for (const s of areas) {
+                    const dash = "─".repeat(Math.max(2, 42 - s.hdr.length));
+                    termPrint("── " + s.hdr + " " + dash, "hl");
+                    for (const l of s.lines) termPrint("  " + l, "");
+                    termPrint("", "");
+                }
+
+                termPrint(
+                    "Available for consulting and project engagements.",
+                    "info",
+                );
+                termPrint("See `contact` for communication channels.", "dim");
+            }
+
+            function cmdContact() {
+                termPrint("CONTACT", "hl");
+                termPrint("───────", "dim");
+                termPrint("  github  github.com/singudotdev", "info");
+                termPrint("  e-mail  contact@singu.dev", "info");
+                termPrint("  pgp     0xF1NG3RPR1NT (rsa4096)", "info");
+                termPrint("", "");
+                termPrint("Encrypted transmissions preferred.", "dim");
+            }
+
+            function cmdPgp() {
+                termPrint("-----BEGIN PGP PUBLIC KEY BLOCK-----", "dim");
+                termPrint("Version: SINGULARITY PGP 2.6", "dim");
+                termPrint("", "");
+                termPrint(
+                    "mQENBGc1NGULAR1TYAAEACq7/oNXJ8gFp+0wXyz3pQ4kJ3hVw6T2u8b1aP5cH9Lm",
+                    "dim",
+                );
+                termPrint(
+                    "Q3o2NkN0ZUFpQjlSc2g4WlpkQS9pNXJtNXNXSlBNTzJyV0tCMXFKVnRwckdQbm5n",
+                    "dim",
+                );
+                termPrint(
+                    "Tk1RUnRyZjU3R3JJa05qcGRRcWZRT2gxL3JBZTNGYzZWdmJyZW1pcUM1Smd0eVo=",
+                    "dim",
+                );
+                termPrint("=0xSIN", "dim");
+                termPrint("-----END PGP PUBLIC KEY BLOCK-----", "dim");
+                termPrint("", "");
+                termPrint(
+                    "fingerprint: 0xF1NG 3RPR 1NT0 N1HI L156 NGU L4R1 TY00",
+                    "hl",
+                );
+            }
+
+            function cmdLs() {
+                const files = [
+                    ["CONTACT  CARD", "singu"],
+                    ["PORTRAIT ASC ", "singu"],
+                    ["ABOUT    TXT ", "singu"],
+                    ["SECRET   ENC ", "root      "],
+                    ["README   ME  ", "singu"],
+                    ["PGP      KEY ", "root      "],
+                ];
+                termPrint(" Directory of C:\\", "dim");
+                termPrint("", "");
+                for (const [f, o] of files) {
+                    termHtml(
+                        `  <span class="term-hl">${f}</span>   <span class="term-info">${(Math.floor(Math.random() * 9000) + 100).toString().padStart(5, "0")} bytes</span>   <span class="term-dim">${o}</span>`,
+                    );
+                }
+                termPrint("", "");
+                termPrint("        6 file(s)   34 712 bytes", "dim");
+                termPrint("                 19 836 928 bytes free", "dim");
+            }
+
+            function cmdCat(args) {
+                const f = (args[0] || "").toLowerCase().replace(".", "");
+                switch (f) {
+                    case "readme":
+                    case "readmeme":
+                    case "readme.me":
+                        termPrint("# README.ME", "hl");
+                        termPrint("", "");
+                        termPrint(
+                            "Thanks for stopping by. This terminal is a contact card.",
+                            "",
+                        );
+                        termPrint(
+                            "Use `contact` to find me. Use `help` to look around.",
+                            "",
+                        );
+                        termPrint(
+                            "Mind the cables. Don't unplug anything.",
+                            "dim",
+                        );
+                        break;
+                    case "about":
+                    case "about.txt":
+                        cmdAbout();
+                        break;
+                    case "pgp":
+                    case "pgp.key":
+                        cmdPgp();
+                        break;
+                    case "secret":
+                    case "secret.enc":
+                        termPrint("ERR: permission denied (try sudo)", "err");
+                        Sound.err();
+                        break;
+                    case "contact.card":
+                    case "contact":
+                        cmdContact();
+                        break;
+                    case "portrait":
+                    case "portrait.asc":
+                        termPrint(ASCII_PORTRAIT, "ok");
+                        break;
+                    case "":
+                        termPrint("usage: cat <file>", "warn");
+                        break;
+                    default:
+                        termPrint(
+                            `cat: ${args[0]}: No such file or directory`,
+                            "err",
+                        );
+                        Sound.err();
+                }
+            }
+
+            function openLink(href, label, isMail = false) {
+                termPrint(`opening ${label} ...`, "info");
+                Sound.ok();
+                setTimeout(() => {
+                    window.open(href, isMail ? "_self" : "_blank", "noopener");
+                }, 200);
+            }
+
+            function cmdSudo(args) {
+                if (!args.length) {
+                    termPrint("usage: sudo <command>", "warn");
+                    return;
+                }
+                const phrases = [
+                    "permission denied. this incident has been logged.",
+                ];
+                termPrint(
+                    phrases[Math.floor(Math.random() * phrases.length)],
+                    "err",
+                );
+                Sound.err();
+            }
+
+            async function cmdHack() {
+                Sound.click();
+                const steps = [
+                    ["probing target ......................... ", "info", "OK"],
+                    ["bypassing firewall (port 1337) ......... ", "info", "OK"],
+                    ["injecting payload ...................... ", "info", "OK"],
+                    ["escalating privileges .................. ", "info", "OK"],
+                    ["exfiltrating data ...................... ", "info", "OK"],
+                    ["covering tracks ........................ ", "info", "OK"],
+                ];
+                for (const [t, c, tail] of steps) {
+                    await sleep(280 + Math.random() * 220);
+                    termHtml(
+                        `<span class="term-${c}">${escapeHtml(t)}</span><span class="term-ok">[ ${tail} ]</span>`,
+                    );
+                    Sound.key();
+                }
+                await sleep(300);
+                termPrint("JUST KIDDING.", "hl");
+                termPrint(
+                    "please do not hack anything. computers are friends.",
+                    "dim",
+                );
+                Sound.ok();
+            }
+
+            function cmdCoffee() {
+                termPrint("   (  )   (   )  )", "hl");
+                termPrint("    ) (   )  (  (", "hl");
+                termPrint("    ( )  (    ) )", "hl");
+                termPrint("    _____________", "info");
+                termPrint("   <_____________> ___", "info");
+                termPrint("   |             |/ _ \\\\", "info");
+                termPrint("   |               | | |", "info");
+                termPrint("   |               |_| |", "info");
+                termPrint("   |_______________|___/", "info");
+                termPrint("   \\\\___________/", "info");
+                termPrint("", "");
+                termPrint("418  I'm a teapot.", "warn");
+            }
+
+            function cmdSingularity() {
+                termPrint("", "");
+                termHtml(
+                    `<pre class="term-banner">${escapeHtml(
+                        ` ░▒▓███████▓▒░▒▓█▓▒░▒▓███████▓▒░ ░▒▓██████▓▒░░▒▓█▓▒░░▒▓█▓▒░
+░▒▓█▓▒░      ░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░
+░▒▓█▓▒░      ░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░      ░▒▓█▓▒░░▒▓█▓▒░
+ ░▒▓██████▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒▒▓███▓▒░▒▓█▓▒░░▒▓█▓▒░
+       ░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░
+       ░▒▓█▓▒░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░
+░▒▓███████▓▒░░▒▓█▓▒░▒▓█▓▒░░▒▓█▓▒░░▒▓██████▓▒░ ░▒▓██████▓▒░ `,
+                    )}</pre>`,
+                );
+                termPrint("", "");
+                termPrint(
+                    '"The point at which the rules stop applying."',
+                    "dim",
+                );
+            }
+
+            function cmdCowsay(args) {
+                const msg = args.join(" ") || "moo.";
+                const bar = "─".repeat(msg.length + 2);
+                termPrint(" ╭" + bar + "╮", "ok");
+                termPrint(" │ " + msg + " │", "ok");
+                termPrint(" ╰" + bar + "╯", "ok");
+                termPrint("        \\   ^__^", "ok");
+                termPrint("         \\  (oo)\\_______", "ok");
+                termPrint("            (__)\\       )\\\\/\\\\", "ok");
+                termPrint("                ||----w |", "ok");
+                termPrint("                ||     ||", "ok");
+            }
+
+            const FORTUNES = [
+                "every system is a security system, in the end.",
+                "the network is the computer, and the computer is on fire.",
+                "in case of emergency, break protocol.",
+                "cryptography is just polite paranoia.",
+                "a backup nobody has restored is a wish, not a backup.",
+                "never trust a clock you can't hear ticking.",
+                "logs are love letters from your past self.",
+                "if it compiles, ship it. if it doesn't, also ship it.",
+            ];
+            function cmdFortune() {
+                termPrint(
+                    "★ " +
+                        FORTUNES[Math.floor(Math.random() * FORTUNES.length)],
+                    "hl",
+                );
+            }
+
+            function cmdTryHarder() {
+                const banner = [
+                    "┌──────────────────────────────────────┐",
+                    "│   ▶▶  T R Y   H A R D E R  ◀◀         │",
+                    "└──────────────────────────────────────┘",
+                ];
+                for (const b of banner) termPrint(b, "err");
+                termPrint("", "");
+                termPrint('the only acceptable answer to "i can\'t".', "warn");
+                termPrint(
+                    "keep enumerating. keep poking. read the source.",
+                    "dim",
+                );
+                termPrint("the box opens. it always opens.", "dim");
+                Sound.ok();
+            }
+
+            function cmdRedTeam() {
+                termPrint("// RED TEAM // offensive operations", "err");
+                termPrint("────────────────────────────────────────", "dim");
+                const phases = [
+                    ["recon          ", ["osint", "dns", "asn", "leaks"]],
+                    ["initial access ", ["phish", "web", "exploit"]],
+                    [
+                        "post-exploit   ",
+                        ["pivot", "persist", "lateral", "beacons"],
+                    ],
+                    ["exfil          ", ["exfil", "c2"]],
+                    ["reporting      ", ["reporting"]],
+                ];
+                for (const [phase, cmds] of phases) {
+                    const links = cmds
+                        .map(
+                            (c) =>
+                                `<span class="term-link red" data-cmd="${c}">${c}</span>`,
+                        )
+                        .join(", ");
+                    termHtml(
+                        `  <span class="term-err">${phase}</span> · ${links}`,
+                    );
+                }
+                termPrint("", "");
+                termPrint("motto: assume breach. then prove it.", "warn");
+                termPrint(
+                    "click any topic above (or type it) for details.",
+                    "dim",
+                );
+                Sound.click();
+            }
+
+            function cmdBlueTeam() {
+                termPrint("// BLUE TEAM // defensive operations", "info");
+                termPrint("────────────────────────────────────────", "dim");
+                const phases = [
+                    ["detect    ", ["siem", "edr", "ndr", "honeytokens"]],
+                    ["harden    ", ["harden", "segmentation", "secrets"]],
+                    ["respond   ", ["respond", "forensics", "containment"]],
+                    ["recover   ", ["recover", "backups"]],
+                    ["iterate   ", ["purple", "tabletop", "postmortem"]],
+                ];
+                for (const [phase, cmds] of phases) {
+                    const links = cmds
+                        .map(
+                            (c) =>
+                                `<span class="term-link blue" data-cmd="${c}">${c}</span>`,
+                        )
+                        .join(", ");
+                    termHtml(
+                        `  <span class="term-info">${phase}</span> · ${links}`,
+                    );
+                }
+                termPrint("", "");
+                termPrint(
+                    "motto: every log is a love letter from your past self.",
+                    "warn",
+                );
+                termPrint(
+                    "click any topic above (or type it) for details.",
+                    "dim",
+                );
+                Sound.click();
+            }
+
+            /* --------- cybersecurity topic registry (sub-commands) ------------- */
+            const CYBER_TOPICS = {
+                // RED ----------------------------------------------------------------
+                osint: {
+                    side: "red",
+                    title: "OSINT",
+                    sub: "open-source intelligence",
+                    points: [
+                        "people  · linkedin, twitter, github commits, paste sites",
+                        "infra   · shodan, censys, fofa, zoomeye",
+                        "docs    · google dorks, document metadata (exiftool)",
+                        "leaks   · haveibeenpwned, dehashed, leakix",
+                    ],
+                },
+                dns: {
+                    side: "red",
+                    title: "DNS RECON",
+                    points: [
+                        "subdomain enum · amass, subfinder, assetfinder",
+                        "zone transfer  · dig axfr (rarely works — always try)",
+                        "CT logs        · crt.sh, certspotter",
+                        "reverse lookup · zone-walking, ranges from rdns",
+                    ],
+                },
+                asn: {
+                    side: "red",
+                    title: "ASN MAPPING",
+                    points: [
+                        "lookup    · bgp.he.net, peeringdb, ipinfo",
+                        "enumerate prefixes owned by the target",
+                        "cross-ref with shodan for exposed services",
+                        "pivot     · shared infra, sister companies, M&A",
+                    ],
+                },
+                leaks: {
+                    side: "red",
+                    title: "CREDENTIAL LEAKS",
+                    points: [
+                        "haveibeenpwned, dehashed, leakcheck",
+                        "github   · trufflehog, gitleaks, gitrob",
+                        "paste    · pastebin, ghostbin, github gists",
+                        "s3 buckets, .env files, dockerhub layers",
+                    ],
+                },
+                phish: {
+                    side: "red",
+                    title: "PHISHING",
+                    points: [
+                        "pretext  · pick a plausible story, not a clever one",
+                        "delivery · lookalike domains, punycode, email spoofing",
+                        "tooling  · gophish, evilginx2, modlishka",
+                        "mfa bypass · relay tokens, MFA fatigue, sim-swap",
+                    ],
+                },
+                web: {
+                    side: "red",
+                    title: "WEB ATTACK SURFACE",
+                    points: [
+                        "fingerprint · wappalyzer, builtwith, headers",
+                        "owasp top10 · injection, broken auth, ssrf, xxe",
+                        "auth     · jwt-none, weak secrets, session fixation",
+                        "tooling  · burp, zap, ffuf, nuclei",
+                    ],
+                },
+                exploit: {
+                    side: "red",
+                    title: "EXPLOITATION",
+                    points: [
+                        "don't reinvent — search CVEs and PoCs first",
+                        "sources  · exploit-db, github advisories, packetstorm",
+                        "frameworks · metasploit, sliver, havoc",
+                        "custom   · read CVE, write your own, log nothing",
+                    ],
+                },
+                pivot: {
+                    side: "red",
+                    title: "PIVOTING",
+                    points: [
+                        "ssh -D for socks; chisel for tcp tunneling",
+                        "proxychains for tooling that doesn't speak socks",
+                        "live off the land · rdp, smb, wmi, winrm",
+                        "stay quiet — use legitimate-looking protocols",
+                    ],
+                },
+                persist: {
+                    side: "red",
+                    title: "PERSISTENCE",
+                    points: [
+                        "windows · scheduled tasks, registry run keys, services",
+                        "linux   · cron, systemd units, .bashrc, modules",
+                        "cloud   · malicious lambdas, OAuth grants, key drops",
+                        "rule    · at least two channels — never just one",
+                    ],
+                },
+                lateral: {
+                    side: "red",
+                    title: "LATERAL MOVEMENT",
+                    points: [
+                        "credentials · mimikatz, lazagne, dpapi extract",
+                        "kerberos    · kerberoast, asreproast, golden tickets",
+                        "remote exec · psexec, wmiexec, atexec, winrm",
+                        "always confirm path back before going forward",
+                    ],
+                },
+                beacons: {
+                    side: "red",
+                    title: "C2 BEACONS",
+                    points: [
+                        "frameworks · cobalt strike, sliver, mythic, havoc",
+                        "sleep with jitter; randomize callback timing",
+                        "shape c2 to look like cdn, dns, or http chatter",
+                        "domain fronting + redirectors hide your infra",
+                    ],
+                },
+                exfil: {
+                    side: "red",
+                    title: "EXFILTRATION",
+                    points: [
+                        "channels · dns, icmp, https blobs, blob storage",
+                        "stage local, exfil compressed + encrypted",
+                        "timing   · low + slow, off-hours, mimic backups",
+                        "avoid    · huge spikes in egress bandwidth",
+                    ],
+                },
+                c2: {
+                    side: "red",
+                    title: "COMMAND & CONTROL",
+                    points: [
+                        "separate listener / redirector / team-server",
+                        "rotate domains, use age, score with virustotal",
+                        "covenant of trust — don't share infra",
+                        "see also · beacons",
+                    ],
+                },
+                reporting: {
+                    side: "red",
+                    title: "REPORTING",
+                    points: [
+                        "narrate the kill chain — not just findings",
+                        "prove impact · data accessed, time-to-DA",
+                        "evidence · screenshots, commands, artifact hashes",
+                        "remediations · prioritized, with cost + effort",
+                    ],
+                },
+                // BLUE ----------------------------------------------------------------
+                siem: {
+                    side: "blue",
+                    title: "SIEM",
+                    sub: "log aggregation + correlation",
+                    points: [
+                        "aggregate · endpoints, network, cloud, identity",
+                        "correlate · stitched timelines, not raw alerts",
+                        "tune      · drive false-positive rate below 10%",
+                        "splunk, elastic, sentinel, chronicle",
+                    ],
+                },
+                edr: {
+                    side: "blue",
+                    title: "EDR",
+                    sub: "endpoint detection + response",
+                    points: [
+                        "telemetry · processes, modules, syscalls, child trees",
+                        "behavioral analytics over signature-only",
+                        "crowdstrike, sentinelone, defender, elastic",
+                        "tamper protection — attackers try this first",
+                    ],
+                },
+                ndr: {
+                    side: "blue",
+                    title: "NDR",
+                    sub: "network detection",
+                    points: [
+                        "inspect metadata + netflows, not just payloads",
+                        "detect c2 · jarm/ja3 fingerprints, tls anomalies",
+                        "zeek/suricata for protocol logs",
+                        "do not skip east-west, only north-south",
+                    ],
+                },
+                honeytokens: {
+                    side: "blue",
+                    title: "HONEYTOKENS",
+                    points: [
+                        "fake creds in vaults, configs, repos",
+                        "cloud canary tokens · aws keys, slack webhooks",
+                        "doc lures · word/pdf with unique callback urls",
+                        "low cost, very high signal",
+                    ],
+                },
+                harden: {
+                    side: "blue",
+                    title: "HARDENING",
+                    points: [
+                        "cis benchmarks + os baselines",
+                        "remove default creds, disable legacy protocols",
+                        "principle of least privilege — everywhere",
+                        "patch · boring, highest ROI in security",
+                    ],
+                },
+                segmentation: {
+                    side: "blue",
+                    title: "SEGMENTATION",
+                    points: [
+                        "flat networks are blast radii",
+                        "micro-segment by trust boundaries",
+                        "zero trust · identity > network location",
+                        "jump hosts, bastions, just-in-time access",
+                    ],
+                },
+                secrets: {
+                    side: "blue",
+                    title: "SECRETS HYGIENE",
+                    points: [
+                        "never in git, env files, or laptops",
+                        "use vault / sops / kms-backed secrets",
+                        "rotate on schedule + on incident",
+                        "short-lived tokens > long-lived keys",
+                    ],
+                },
+                respond: {
+                    side: "blue",
+                    title: "INCIDENT RESPONSE",
+                    points: [
+                        "prepare → identify → contain → eradicate → recover → review",
+                        "runbooks per incident type, drilled regularly",
+                        "comms · who, when, what (don't freelance)",
+                        "preserve evidence before remediation",
+                    ],
+                },
+                forensics: {
+                    side: "blue",
+                    title: "FORENSICS",
+                    points: [
+                        "volatile first · memory, network, processes",
+                        "chain of custody — hash everything",
+                        "tools · volatility, plaso, autopsy, eric zimmerman",
+                        "timeline > theories. let the evidence talk.",
+                    ],
+                },
+                containment: {
+                    side: "blue",
+                    title: "CONTAINMENT",
+                    points: [
+                        "isolate hosts via network ACLs, not power-off",
+                        "rotate creds in the blast radius",
+                        "block c2 domains/ips at egress",
+                        "pause CI/CD if build infra is suspect",
+                    ],
+                },
+                recover: {
+                    side: "blue",
+                    title: "RECOVERY",
+                    points: [
+                        "a backup nobody has restored is a wish",
+                        "test restores quarterly. measure RTO/RPO",
+                        "rebuild > clean. attackers love residues.",
+                        "capture lessons learned and share",
+                    ],
+                },
+                backups: {
+                    side: "blue",
+                    title: "BACKUPS",
+                    points: [
+                        "3-2-1 · 3 copies, 2 media, 1 offsite",
+                        "immutable + offline copies for ransomware",
+                        "encrypt at rest, separate key custody",
+                        "restore drills — actually do them",
+                    ],
+                },
+                purple: {
+                    side: "blue",
+                    title: "PURPLE TEAM",
+                    points: [
+                        "red emulates, blue detects, both iterate together",
+                        "attack simulation · atomic red team, caldera",
+                        "measure · which TTPs alert? which don't?",
+                        "closes the gap between offense and defense",
+                    ],
+                },
+                tabletop: {
+                    side: "blue",
+                    title: "TABLETOP EXERCISE",
+                    points: [
+                        "scenario-based, no real systems touched",
+                        "practice decisions · when to disclose, who to call",
+                        "leadership + technical, in the same room",
+                        "reveals gaps that drills can't",
+                    ],
+                },
+                postmortem: {
+                    side: "blue",
+                    title: "POST-MORTEM",
+                    points: [
+                        "blameless · focus on systems + processes",
+                        "document timeline, decisions, lessons",
+                        "action items with owners + deadlines",
+                        "share widely — best learning is shared",
+                    ],
+                },
+            };
+
+            function renderTopic(key) {
+                const t = CYBER_TOPICS[key];
+                if (!t) {
+                    termPrint(`unknown topic: ${key}`, "err");
+                    Sound.err();
+                    return;
+                }
+                const cls = t.side === "red" ? "err" : "info";
+                const sub = t.sub ? " · " + t.sub : "";
+                termPrint(`// ${t.title}${sub}`, cls);
+                termPrint("────────────────────────────────────────", "dim");
+                for (const p of t.points) termPrint("  " + p, cls);
+                termPrint("", "");
+                const back = t.side === "red" ? "redteam" : "blueteam";
+                termHtml(
+                    `<span class="term-dim">back to: </span><span class="term-link ${t.side}" data-cmd="${back}">${back}</span>`,
+                );
+                Sound.click();
+            }
+
+            // register each topic as a hidden command
+            for (const k of Object.keys(CYBER_TOPICS)) {
+                if (!COMMANDS[k])
+                    COMMANDS[k] = {
+                        desc: "???",
+                        fn: () => renderTopic(k),
+                        hidden: true,
+                    };
+            }
+            // aliases
+            COMMANDS.recon = COMMANDS.osint && {
+                desc: "???",
+                fn: () => renderTopic("osint"),
+                hidden: true,
+            };
+            COMMANDS.ir = {
+                desc: "???",
+                fn: () => renderTopic("respond"),
+                hidden: true,
+            };
+            COMMANDS.detect = {
+                desc: "???",
+                fn: () => {
+                    termPrint("see: siem, edr, ndr, honeytokens", "info");
+                },
+                hidden: true,
+            };
+            COMMANDS.iterate = {
+                desc: "???",
+                fn: () => {
+                    termPrint("see: purple, tabletop, postmortem", "info");
+                },
+                hidden: true,
+            };
+
+            function sleep(ms) {
+                return new Promise((r) => setTimeout(r, ms));
+            }
+
+            /* --------------------- MATRIX EASTER EGG --------------------------- */
+            let matrixAnim = null;
+            function cmdMatrix() {
+                termPrint("entering the matrix ...", "ok");
+                Sound.ok();
+                const overlay = $("#matrix");
+                overlay.classList.add("on");
+                startMatrix();
+            }
+            function startMatrix() {
+                const c = $("#matrix-canvas");
+                const ctx = c.getContext("2d");
+                function resize() {
+                    c.width = c.clientWidth;
+                    c.height = c.clientHeight;
+                }
+                resize();
+                window.addEventListener("resize", resize);
+                const chars =
+                    "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホ0123456789SINGULARITY".split(
+                        "",
+                    );
+                const fontSize = 16;
+                const cols = Math.floor(c.width / fontSize);
+                const drops = Array(cols).fill(1);
+                function draw() {
+                    ctx.fillStyle = "rgba(0,0,0,.08)";
+                    ctx.fillRect(0, 0, c.width, c.height);
+                    ctx.fillStyle = "#55ff55";
+                    ctx.font = fontSize + "px monospace";
+                    for (let i = 0; i < drops.length; i++) {
+                        const ch =
+                            chars[Math.floor(Math.random() * chars.length)];
+                        ctx.fillText(ch, i * fontSize, drops[i] * fontSize);
+                        if (
+                            drops[i] * fontSize > c.height &&
+                            Math.random() > 0.975
+                        )
+                            drops[i] = 0;
+                        drops[i]++;
+                    }
+                    matrixAnim = requestAnimationFrame(draw);
+                }
+                cancelAnimationFrame(matrixAnim);
+                draw();
+            }
+            function stopMatrix() {
+                if (matrixAnim) cancelAnimationFrame(matrixAnim);
+                matrixAnim = null;
+                $("#matrix").classList.remove("on");
+            }
+            $("#matrix").addEventListener("click", stopMatrix);
+
+            /* --------------------- GLOBAL KEY HANDLERS ------------------------- */
+            window.addEventListener("keydown", (e) => {
+                // matrix exit
+                if (
+                    $("#matrix").classList.contains("on") &&
+                    e.key === "Escape"
+                ) {
+                    stopMatrix();
+                    return;
+                }
+                // function keys → commands
+                const map = {
+                    F1: "help",
+                    F2: "about",
+                    F3: "contact",
+                    F5: "clear",
+                    F6: "ls",
+                };
+                if (map[e.key]) {
+                    e.preventDefault();
+                    if (!wins.has("term")) openTerminal();
+                    focusWindow("term");
+                    runCommand(map[e.key]);
+                }
+            });
+
+            /* status-bar fk buttons */
+            document.addEventListener("click", (e) => {
+                const fk = e.target.closest(".fk");
+                if (fk) {
+                    Sound.click();
+                    if (!wins.has("term")) openTerminal();
+                    focusWindow("term");
+                    runCommand(fk.dataset.cmd);
+                    return;
+                }
+                const mi = e.target.closest(".menubar .item");
+                if (mi) {
+                    Sound.click();
+                    const a = mi.dataset.action;
+                    if (a === "windows") {
+                        openContactCard();
+                        openPortrait();
+                        openTerminal();
+                    } else if (a === "help" || a === "about") {
+                        if (!wins.has("term")) openTerminal();
+                        focusWindow("term");
+                        runCommand(a);
+                    }
+                }
+            });
+
+            /* --------------------- KICK OFF ------------------------------------ */
+            bootSequence();
+
+            /* --------------------- ONE-TIME HINT ------------------------------- */
+            function setupHint() {
+                const hint = document.getElementById("hint");
+                if (!hint) return;
+                const close = document.getElementById("hint-close");
+                const dismiss = () => {
+                    hint.classList.add("dismiss");
+                    setTimeout(() => hint.remove(), 380);
+                };
+                close.addEventListener("click", () => {
+                    Sound.click();
+                    dismiss();
+                });
+                // auto-dismiss after 30s if user hasn't closed it
+                setTimeout(() => {
+                    if (document.body.contains(hint)) dismiss();
+                }, 30000);
+            }
+            setupHint();
+        </script>
+    </body>
+</html>

@@ -1,0 +1,2016 @@
+<!-- 
+  Project: Singularity Terminal Access Portfolio Site
+  Author: singudotdev (singu.dev)
+  License: CC-BY-4.0
+-->
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>SINGULARITY // TERMINAL ACCESS</title>
+        <style>
+            /* ─── PHOSPHOR PALETTE ──────────────────────────────────────────────
+            Authentic P1 amber-green. Real VT100/ADM-3A terminals glowed
+            yellow-amber on black. P1 green (#33ff00) used as accent tint.
+            ─────────────────────────────────────────────────────────────────── */
+            @import url("https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap");
+
+            :root {
+                /* Phosphor colors */
+                --p-bright: #e8ff80; /* peak brightness, near-white */
+                --p-mid: #b8e800; /* nominal phosphor green */
+                --p-amber: #f0c000; /* P1 amber glow base */
+                --p-dim: #4a6800; /* dim phosphor, barely lit */
+                --p-ghost: #1a2400; /* persistence afterimage */
+                --p-red: #ff4040; /* error state only */
+                --bg: #020300; /* near-absolute black glass */
+                --scanline-a: rgba(0, 0, 0, 0.55);
+
+                /* Typography */
+                --font: "Share Tech Mono", "Courier New", monospace;
+
+                /* Glow radii */
+                --glow-sm: 0 0 4px var(--p-mid), 0 0 8px rgba(184, 232, 0, 0.4);
+                --glow-md:
+                    0 0 6px var(--p-mid), 0 0 14px rgba(184, 232, 0, 0.35),
+                    0 0 28px rgba(184, 232, 0, 0.15);
+                --glow-lg:
+                    0 0 8px var(--p-amber), 0 0 20px rgba(240, 192, 0, 0.4),
+                    0 0 48px rgba(240, 192, 0, 0.15);
+                --glow-err:
+                    0 0 6px var(--p-red), 0 0 16px rgba(255, 64, 64, 0.4);
+            }
+
+            *,
+            *::before,
+            *::after {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+
+            /* ─── BODY: THE GLASS FACE OF THE MONITOR ───────────────────── */
+            body {
+                background: var(--bg);
+                color: var(--p-mid);
+                font-family: var(--font);
+                font-size: 15px;
+                line-height: 1.5;
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                padding: 2rem 1rem 5rem;
+                overflow-x: hidden;
+                cursor: crosshair;
+                position: relative;
+            }
+
+            /* ─── LAYER 0: PHOSPHOR GRAIN ──────────────────────────────── */
+            /* The glass face has luminescent grain from the phosphor coating */
+            body::before {
+                content: "";
+                position: fixed;
+                inset: 0;
+                background-image:
+                    radial-gradient(
+                        ellipse 1px 1px at 20% 30%,
+                        rgba(184, 232, 0, 0.03) 100%,
+                        transparent 100%
+                    ),
+                    radial-gradient(
+                        ellipse 1px 1px at 60% 70%,
+                        rgba(184, 232, 0, 0.03) 100%,
+                        transparent 100%
+                    ),
+                    radial-gradient(
+                        ellipse 1px 1px at 80% 20%,
+                        rgba(184, 232, 0, 0.02) 100%,
+                        transparent 100%
+                    );
+                background-size:
+                    3px 3px,
+                    5px 5px,
+                    7px 7px;
+                z-index: 1;
+                pointer-events: none;
+                animation: grain 0.08s steps(1) infinite;
+                opacity: 0.6;
+            }
+
+            @keyframes grain {
+                0% {
+                    background-position:
+                        0 0,
+                        0 0,
+                        0 0;
+                }
+                20% {
+                    background-position:
+                        12px 8px,
+                        -6px 4px,
+                        3px -9px;
+                }
+                40% {
+                    background-position:
+                        -8px 15px,
+                        9px -3px,
+                        -4px 6px;
+                }
+                60% {
+                    background-position:
+                        5px -12px,
+                        -3px 11px,
+                        8px 2px;
+                }
+                80% {
+                    background-position:
+                        -15px 3px,
+                        7px -8px,
+                        -1px 13px;
+                }
+                100% {
+                    background-position:
+                        0 0,
+                        0 0,
+                        0 0;
+                }
+            }
+
+            /* ─── LAYER 1: RASTER SCANLINES ─────────────────────────────────────
+            CRT monitors draw horizontal rows of electron beams; the dark gaps
+            between scan rows create the characteristic scanline texture.
+            ─────────────────────────────────────────────────────────────────── */
+            body::after {
+                content: "";
+                position: fixed;
+                inset: 0;
+                background: repeating-linear-gradient(
+                    to bottom,
+                    transparent 0px,
+                    transparent 2px,
+                    var(--scanline-a) 2px,
+                    var(--scanline-a) 4px
+                );
+                z-index: 1000;
+                pointer-events: none;
+                animation: scanroll 8s linear infinite;
+            }
+
+            /* Rolling scanline — the refresh band moving up the screen */
+            @keyframes scanroll {
+                0% {
+                    background-position: 0 0;
+                }
+                100% {
+                    background-position: 0 -200px;
+                }
+            }
+
+            /* ─── LAYER 2: CRT VIGNETTE & BARREL DISTORTION ─────────────────────
+            Glass curves at edges so brightness falls off sharply toward corners.
+            Barrel distortion is faked via an SVG feTurbulence filter on the root.
+            ─────────────────────────────────────────────────────────────────── */
+            .crt-vignette {
+                position: fixed;
+                inset: 0;
+                background: radial-gradient(
+                    ellipse 85% 80% at 50% 50%,
+                    transparent 55%,
+                    rgba(0, 0, 0, 0.5) 75%,
+                    rgba(0, 0, 0, 0.92) 100%
+                );
+                z-index: 999;
+                pointer-events: none;
+            }
+
+            /* Horizontal flicker bands that occasionally sweep the screen */
+            .crt-flicker {
+                position: fixed;
+                inset: 0;
+                z-index: 998;
+                pointer-events: none;
+                animation: hflicker 0.1s steps(1) infinite;
+                opacity: 0;
+            }
+
+            @keyframes hflicker {
+                0%,
+                95%,
+                100% {
+                    opacity: 0;
+                }
+                96% {
+                    opacity: 1;
+                    background: linear-gradient(
+                        to bottom,
+                        transparent 30%,
+                        rgba(184, 232, 0, 0.015) 45%,
+                        transparent 60%
+                    );
+                }
+                98% {
+                    opacity: 1;
+                    background: linear-gradient(
+                        to bottom,
+                        transparent 55%,
+                        rgba(184, 232, 0, 0.01) 65%,
+                        transparent 80%
+                    );
+                }
+            }
+
+            /* Bloom glow — the monitor's internal glass reflection */
+            .bloom {
+                position: fixed;
+                inset: 0;
+                background: radial-gradient(
+                    ellipse 70% 60% at 50% 50%,
+                    rgba(184, 232, 0, 0.025) 0%,
+                    transparent 65%
+                );
+                z-index: 2;
+                pointer-events: none;
+            }
+
+            /* ─── LAYER 3: CURSOR RIPPLE (mouse proximity glow) ──────── */
+            .cursor-glow {
+                position: fixed;
+                inset: 0;
+                z-index: 3;
+                pointer-events: none;
+                background: radial-gradient(
+                    circle 180px at var(--mx, 50%) var(--my, 50%),
+                    rgba(184, 232, 0, 0.06) 0%,
+                    transparent 100%
+                );
+                transition: background 0.05s linear;
+            }
+
+            /* ─── SCREEN WARP: SVG Filter ──────────────────────────────── */
+            .filter-host {
+                position: fixed;
+                width: 0;
+                height: 0;
+                overflow: visible;
+            }
+
+            /* ─── MAIN TERMINAL WINDOW ───────────────────────────────────────────
+            The phosphor screen area — styled as a CRT bezel inset with inner
+            shadow depth and a subtle glass-face gradient.
+            ─────────────────────────────────────────────────────────────────── */
+            .terminal-bezel {
+                position: relative;
+                z-index: 10;
+                width: min(780px, 94vw);
+                margin: 0 auto;
+            }
+
+            /* Decorative: reel-to-reel tape header bar */
+            .bezel-header {
+                display: flex;
+                align-items: center;
+                gap: 1.2rem;
+                padding: 0.5rem 0 0.8rem;
+                border-bottom: 1px solid var(--p-dim);
+                margin-bottom: 1.4rem;
+            }
+
+            .reel {
+                width: 28px;
+                height: 28px;
+                border: 2px solid var(--p-dim);
+                border-radius: 50%;
+                position: relative;
+                flex-shrink: 0;
+            }
+
+            .reel::before {
+                content: "";
+                position: absolute;
+                inset: 4px;
+                border: 1px solid var(--p-ghost);
+                border-radius: 50%;
+            }
+
+            .reel::after {
+                content: "";
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                width: 4px;
+                height: 4px;
+                background: var(--p-dim);
+                border-radius: 50%;
+                transform: translate(-50%, -50%);
+                box-shadow: var(--glow-sm);
+            }
+
+            .reel.spinning {
+                animation: reel-spin 2s linear infinite;
+            }
+            @keyframes reel-spin {
+                to {
+                    transform: rotate(360deg);
+                }
+            }
+
+            .bezel-label {
+                font-size: 10px;
+                letter-spacing: 3px;
+                color: var(--p-dim);
+                text-transform: uppercase;
+                flex: 1;
+            }
+
+            .status-leds {
+                display: flex;
+                gap: 8px;
+            }
+
+            .led {
+                width: 7px;
+                height: 7px;
+                border-radius: 50%;
+                background: var(--p-ghost);
+            }
+
+            .led.active {
+                background: var(--p-mid);
+                box-shadow: var(--glow-sm);
+                animation: led-pulse 1.4s ease-in-out infinite;
+            }
+
+            .led.amber {
+                background: var(--p-amber);
+                box-shadow: var(--glow-lg);
+            }
+
+            @keyframes led-pulse {
+                0%,
+                100% {
+                    opacity: 1;
+                }
+                50% {
+                    opacity: 0.4;
+                }
+            }
+
+            /* The actual display glass */
+            .crt-screen {
+                background: linear-gradient(
+                    160deg,
+                    rgba(184, 232, 0, 0.015) 0%,
+                    transparent 50%,
+                    rgba(184, 232, 0, 0.008) 100%
+                );
+                border: 1px solid var(--p-dim);
+                outline: 4px solid rgba(0, 0, 0, 0.8);
+                outline-offset: -1px;
+                padding: 2.4rem 2.8rem 2rem;
+                position: relative;
+                box-shadow:
+                    inset 0 0 60px rgba(0, 0, 0, 0.7),
+                    inset 0 0 120px rgba(0, 0, 0, 0.4),
+                    0 0 0 1px rgba(184, 232, 0, 0.08),
+                    0 0 40px rgba(184, 232, 0, 0.05);
+            }
+
+            /* Screen corner rounding to suggest CRT glass */
+            .crt-screen::before {
+                content: "";
+                position: absolute;
+                inset: 0;
+                border-radius: 3px;
+                pointer-events: none;
+                background: radial-gradient(
+                    ellipse 110% 105% at 50% 50%,
+                    transparent 65%,
+                    rgba(0, 0, 0, 0.5) 100%
+                );
+            }
+
+            /* Reflection strip — the overhead fluorescent light hit */
+            .crt-screen::after {
+                content: "";
+                position: absolute;
+                top: 0;
+                left: 8%;
+                right: 8%;
+                height: 2px;
+                background: linear-gradient(
+                    to right,
+                    transparent,
+                    rgba(255, 255, 255, 0.04),
+                    rgba(255, 255, 255, 0.06),
+                    rgba(255, 255, 255, 0.04),
+                    transparent
+                );
+                pointer-events: none;
+            }
+
+            /* Window close button */
+            .window-close {
+                position: absolute;
+                top: 1.2rem;
+                right: 1.2rem;
+                background: transparent;
+                border: 1px solid var(--p-dim);
+                color: var(--p-dim);
+                width: 22px;
+                height: 22px;
+                font-size: 14px;
+                font-family: var(--font);
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                transition: all 0.2s;
+                z-index: 5;
+            }
+
+            .window-close:hover {
+                border-color: var(--p-red);
+                color: var(--p-red);
+                box-shadow: var(--glow-err);
+                background: rgba(255, 64, 64, 0.08);
+            }
+
+            /* ─── TYPOGRAPHY ────────────────────────────────────────────── */
+            .screen-title {
+                font-size: clamp(1.6rem, 5vw, 2.6rem);
+                letter-spacing: 0.25em;
+                text-transform: uppercase;
+                color: var(--p-bright);
+                text-shadow: var(--glow-md);
+                animation: glitch-title 6s infinite;
+                line-height: 1.1;
+                margin-bottom: 0.3rem;
+            }
+
+            @keyframes glitch-title {
+                0%,
+                88%,
+                100% {
+                    transform: none;
+                    clip-path: none;
+                }
+                89% {
+                    transform: translate(-2px, 0);
+                    clip-path: polygon(0 20%, 100% 20%, 100% 45%, 0 45%);
+                }
+                90% {
+                    transform: translate(2px, 0);
+                    clip-path: polygon(0 55%, 100% 55%, 100% 80%, 0 80%);
+                }
+                91% {
+                    transform: none;
+                }
+                92% {
+                    transform: translate(1px, -1px);
+                }
+                93% {
+                    transform: none;
+                }
+            }
+
+            .screen-sub {
+                font-size: 11px;
+                letter-spacing: 0.3em;
+                color: var(--p-dim);
+                text-transform: uppercase;
+                border-bottom: 1px dashed var(--p-ghost);
+                padding-bottom: 1.2rem;
+                margin-bottom: 1.6rem;
+                word-break: break-word;
+                overflow-wrap: break-word;
+            }
+
+            /* ─── TERMINAL LOG ──────────────────────────────────────────── */
+            .terminal-log {
+                min-height: 140px;
+                margin-bottom: 1.4rem;
+                font-size: 14px;
+                line-height: 1.65;
+            }
+
+            .log-line {
+                display: block;
+                margin-bottom: 2px;
+                word-break: break-all;
+                overflow-wrap: anywhere;
+                /* Phosphor persistence: each new character glows bright then settles */
+                animation: char-appear 0.05s ease-out;
+            }
+
+            @keyframes char-appear {
+                0% {
+                    color: var(--p-bright);
+                    text-shadow:
+                        0 0 12px var(--p-bright),
+                        0 0 30px var(--p-mid);
+                }
+                100% {
+                    /* settles to .log-info / .log-success base */
+                }
+            }
+
+            .log-info {
+                color: var(--p-mid);
+                text-shadow: var(--glow-sm);
+            }
+            .log-success {
+                color: var(--p-bright);
+                text-shadow: var(--glow-md);
+            }
+            .log-error {
+                color: var(--p-red);
+                text-shadow: var(--glow-err);
+            }
+            .log-dim {
+                color: var(--p-dim);
+                text-shadow: none;
+            }
+
+            /* ─── INPUT AREA ─────────────────────────────────────────────── */
+            .input-area {
+                display: none;
+                align-items: center;
+                gap: 0.8rem;
+                margin-top: 0.5rem;
+            }
+
+            .input-area.visible {
+                display: flex;
+            }
+
+            .prompt-label {
+                color: var(--p-amber);
+                text-shadow: var(--glow-lg);
+                white-space: nowrap;
+                font-size: 14px;
+            }
+
+            #terminal-input {
+                background: transparent;
+                border: none;
+                border-bottom: 1px solid var(--p-dim);
+                color: var(--p-bright);
+                font-family: var(--font);
+                font-size: 14px;
+                outline: none;
+                flex: 1;
+                padding: 3px 0;
+                text-shadow: var(--glow-md);
+                caret-color: var(--p-amber);
+                letter-spacing: 0.05em;
+            }
+
+            #terminal-input::selection {
+                background: rgba(184, 232, 0, 0.25);
+            }
+
+            #terminal-input.error {
+                color: var(--p-red);
+                text-shadow: var(--glow-err);
+                border-bottom-color: var(--p-red);
+                animation: shake 0.35s ease-in-out;
+            }
+
+            @keyframes shake {
+                0%,
+                100% {
+                    transform: translateX(0);
+                }
+                20% {
+                    transform: translateX(-6px);
+                }
+                40% {
+                    transform: translateX(6px);
+                }
+                60% {
+                    transform: translateX(-4px);
+                }
+                80% {
+                    transform: translateX(4px);
+                }
+            }
+
+            /* ─── CONTENT: POST-LOGIN ─────────────────────────────────── */
+            .content-wrapper {
+                display: none;
+            }
+
+            .typewriter-output {
+                display: none;
+                min-height: 70px;
+                font-size: 14px;
+                line-height: 1.7;
+                color: var(--p-mid);
+                text-shadow: var(--glow-sm);
+                margin-bottom: 1.8rem;
+            }
+
+            .cursor-block {
+                display: inline-block;
+                width: 9px;
+                height: 1em;
+                background: var(--p-amber);
+                box-shadow: var(--glow-lg);
+                vertical-align: text-bottom;
+                animation: curblink 0.9s step-end infinite;
+            }
+
+            @keyframes curblink {
+                0%,
+                100% {
+                    opacity: 1;
+                }
+                50% {
+                    opacity: 0;
+                }
+            }
+
+            /* ─── SKILLS MODULE GRID ─────────────────────────────────────────────
+            Phosphor-readout matrix: cells scan in one by one post-login.
+            ─────────────────────────────────────────────────────────────────── */
+            .skills-section {
+                display: none;
+                margin: 1.8rem 0;
+                opacity: 0;
+                transition: opacity 0.8s ease;
+            }
+
+            .skills-section.visible {
+                opacity: 1;
+            }
+
+            .skills-header {
+                font-size: 10px;
+                letter-spacing: 3px;
+                color: var(--p-dim);
+                margin-bottom: 1rem;
+                text-transform: uppercase;
+            }
+
+            .skills-matrix {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+                gap: 8px;
+            }
+
+            .skill-cell {
+                border: 1px solid var(--p-ghost);
+                padding: 8px 12px 8px 20px;
+                font-size: 13px;
+                color: var(--p-dim);
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                position: relative;
+                cursor: default;
+                transition: all 0.25s ease;
+                overflow: hidden;
+            }
+
+            /* Phosphor burn-in effect on hover */
+            .skill-cell::before {
+                content: "";
+                position: absolute;
+                inset: 0;
+                background: linear-gradient(
+                    90deg,
+                    rgba(184, 232, 0, 0) 0%,
+                    rgba(184, 232, 0, 0.05) 100%
+                );
+                opacity: 0;
+                transition: opacity 0.25s;
+            }
+
+            .skill-cell::after {
+                content: "▶";
+                position: absolute;
+                left: 6px;
+                top: 50%;
+                transform: translateY(-50%);
+                font-size: 8px;
+                opacity: 0;
+                color: var(--p-amber);
+                transition: opacity 0.2s;
+            }
+
+            .skill-cell:hover {
+                border-color: var(--p-mid);
+                color: var(--p-bright);
+                text-shadow: var(--glow-sm);
+                box-shadow:
+                    inset 0 0 20px rgba(184, 232, 0, 0.05),
+                    0 0 10px rgba(184, 232, 0, 0.1);
+            }
+
+            .skill-cell:hover::before {
+                opacity: 1;
+            }
+            .skill-cell:hover::after {
+                opacity: 1;
+            }
+
+            /* ─── CONTACT SECTION ──────────────────────────────────────── */
+            .contact-section {
+                display: none;
+                margin-top: 2rem;
+                padding-top: 1.2rem;
+                border-top: 1px solid var(--p-ghost);
+                text-align: center;
+                opacity: 0;
+                transition: opacity 0.8s ease;
+            }
+
+            .contact-section.visible {
+                opacity: 1;
+            }
+
+            .contact-label {
+                font-size: 10px;
+                letter-spacing: 3px;
+                color: var(--p-dim);
+                margin-bottom: 1.4rem;
+                text-transform: uppercase;
+            }
+
+            .btns {
+                display: flex;
+                gap: 1rem;
+                justify-content: center;
+                flex-wrap: wrap;
+            }
+
+            .btn {
+                display: inline-flex;
+                align-items: center;
+                gap: 8px;
+                padding: 10px 26px;
+                border: 1px solid var(--p-dim);
+                color: var(--p-mid);
+                text-decoration: none;
+                text-transform: uppercase;
+                letter-spacing: 0.12em;
+                font-family: var(--font);
+                font-size: 13px;
+                cursor: pointer;
+                background: transparent;
+                transition: all 0.25s ease;
+                text-shadow: var(--glow-sm);
+                position: relative;
+                overflow: hidden;
+            }
+
+            .btn::before {
+                content: "";
+                position: absolute;
+                inset: 0;
+                background: rgba(184, 232, 0, 0);
+                transition: background 0.25s;
+            }
+
+            .btn:hover {
+                border-color: var(--p-bright);
+                color: var(--bg);
+                background: var(--p-mid);
+                text-shadow: none;
+                box-shadow:
+                    0 0 20px rgba(184, 232, 0, 0.4),
+                    0 0 40px rgba(184, 232, 0, 0.2);
+            }
+
+            /* ─── SYSTEM STATUS BAR ─────────────────────────────────────── */
+            .status-bar {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                flex-wrap: wrap;
+                gap: 0.3rem 0.8rem;
+                margin-top: 2rem;
+                padding-top: 0.8rem;
+                border-top: 1px solid var(--p-ghost);
+                font-size: 10px;
+                letter-spacing: 0.15em;
+                color: var(--p-ghost);
+                text-transform: uppercase;
+                overflow: hidden;
+            }
+
+            .status-clock {
+                color: var(--p-dim);
+            }
+
+            /* ─── PHOSPHOR PERSISTENCE OVERLAY ──────────────────────────────────
+            Simulates ghost images that linger on the phosphor coating —
+            a centre-weighted screen bloom via mix-blend-mode: screen.
+            ─────────────────────────────────────────────────────────────────── */
+            .persistence {
+                position: fixed;
+                inset: 0;
+                pointer-events: none;
+                z-index: 4;
+                mix-blend-mode: screen;
+                background: radial-gradient(
+                    ellipse 80% 70% at 50% 50%,
+                    rgba(184, 232, 0, 0.008) 50%,
+                    transparent 70%
+                );
+            }
+
+            /* ─── CLOSED OVERLAY ──────────────────────────────────────── */
+            .closed-overlay {
+                display: none;
+                position: fixed;
+                inset: 0;
+                background: var(--bg);
+                z-index: 9000;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                text-align: center;
+                gap: 2rem;
+                padding: 2rem 1.5rem;
+                opacity: 0;
+                transition: opacity 0.4s ease;
+            }
+
+            .closed-overlay.visible {
+                display: flex;
+            }
+            .closed-overlay.fade-in {
+                opacity: 1;
+            }
+
+            .closed-title {
+                font-size: clamp(1.5rem, 5vw, 2.8rem);
+                letter-spacing: 0.3em;
+                text-transform: uppercase;
+                color: var(--p-red);
+                text-shadow: var(--glow-err);
+                animation: glitch-title 3s infinite;
+            }
+
+            .closed-sub {
+                font-size: 11px;
+                letter-spacing: 0.25em;
+                color: var(--p-dim);
+            }
+
+            .reconnect-btn {
+                padding: 14px 36px;
+                border: 1px solid var(--p-mid);
+                color: var(--p-mid);
+                background: transparent;
+                font-family: var(--font);
+                font-size: 14px;
+                letter-spacing: 0.15em;
+                text-transform: uppercase;
+                cursor: pointer;
+                transition: all 0.25s;
+                text-shadow: var(--glow-sm);
+            }
+
+            .reconnect-btn:hover {
+                background: var(--p-mid);
+                color: var(--bg);
+                text-shadow: none;
+                box-shadow: 0 0 30px rgba(184, 232, 0, 0.4);
+            }
+
+            /* ─── FOOTER ──────────────────────────────────────────────── */
+            .footer {
+                position: fixed;
+                bottom: 0.8rem;
+                left: 0;
+                right: 0;
+                text-align: center;
+                font-size: 9px;
+                letter-spacing: 0.2em;
+                color: var(--p-ghost);
+                z-index: 20;
+                pointer-events: none;
+                text-transform: uppercase;
+            }
+
+            /* ─── BOOT SEQUENCE OVERLAY ────────────────────────────────── */
+            .boot-overlay {
+                position: fixed;
+                inset: 0;
+                background: var(--bg);
+                z-index: 8999;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                pointer-events: none;
+                transition: opacity 0.5s ease;
+            }
+
+            .boot-overlay.hidden {
+                opacity: 0;
+                pointer-events: none;
+            }
+
+            .boot-scanlines {
+                position: absolute;
+                inset: 0;
+                background: repeating-linear-gradient(
+                    to bottom,
+                    transparent 0,
+                    transparent 3px,
+                    rgba(184, 232, 0, 0.015) 3px,
+                    rgba(184, 232, 0, 0.015) 4px
+                );
+            }
+
+            .boot-logo {
+                font-size: clamp(2rem, 8vw, 5rem);
+                letter-spacing: 0.35em;
+                color: var(--p-mid);
+                text-shadow: var(--glow-md);
+                text-transform: uppercase;
+                animation: power-on 1.2s ease-out forwards;
+            }
+
+            @keyframes power-on {
+                0% {
+                    opacity: 0;
+                    transform: scaleY(0.01) scaleX(1);
+                    filter: brightness(4);
+                }
+                15% {
+                    opacity: 1;
+                    transform: scaleY(0.01) scaleX(1);
+                }
+                40% {
+                    transform: scaleY(1) scaleX(1.02);
+                    filter: brightness(2);
+                }
+                60% {
+                    transform: scaleY(1) scaleX(1);
+                    filter: brightness(1.5);
+                }
+                100% {
+                    transform: scaleY(1) scaleX(1);
+                    filter: brightness(1);
+                }
+            }
+
+            .boot-progress {
+                margin-top: 2rem;
+                width: min(400px, 80vw);
+                height: 2px;
+                background: var(--p-ghost);
+                overflow: hidden;
+            }
+
+            .boot-bar {
+                height: 100%;
+                background: var(--p-mid);
+                box-shadow: var(--glow-md);
+                width: 0%;
+                animation: boot-load 1.8s ease-in-out forwards 0.5s;
+            }
+
+            @keyframes boot-load {
+                0% {
+                    width: 0%;
+                }
+                30% {
+                    width: 35%;
+                }
+                60% {
+                    width: 65%;
+                }
+                85% {
+                    width: 88%;
+                }
+                100% {
+                    width: 100%;
+                }
+            }
+
+            .boot-text {
+                margin-top: 1rem;
+                font-size: 10px;
+                letter-spacing: 0.2em;
+                color: var(--p-dim);
+                text-transform: uppercase;
+                animation: boot-blink 0.4s step-end infinite;
+            }
+
+            @keyframes boot-blink {
+                0%,
+                100% {
+                    opacity: 1;
+                }
+                50% {
+                    opacity: 0;
+                }
+            }
+
+            /* ─── RESPONSIVE ─────────────────────────────────────────────────────
+            xs ≤ 380px — very small phones (SE, Galaxy A series)
+            sm ≤ 480px — normal phones portrait
+            md ≤ 768px — large phones landscape / small tablets
+            lg ≤ 960px — tablets portrait
+            Above 960px: default desktop layout applies.
+            ─────────────────────────────────────────────────────────────────── */
+
+            /* Prevent horizontal scroll at root level */
+            html {
+                overflow-x: hidden;
+            }
+
+            /* Input must never push its row wider than the container */
+            #terminal-input {
+                min-width: 0;
+            }
+
+            /* Disable hover states on touch devices — prevents sticky :hover */
+            @media (hover: none) {
+                .skill-cell:hover {
+                    border-color: var(--p-ghost);
+                    color: var(--p-dim);
+                    text-shadow: none;
+                    box-shadow: none;
+                }
+                .skill-cell:hover::before,
+                .skill-cell:hover::after {
+                    opacity: 0;
+                }
+
+                .btn:hover {
+                    border-color: var(--p-dim);
+                    color: var(--p-mid);
+                    background: transparent;
+                    text-shadow: var(--glow-sm);
+                    box-shadow: none;
+                }
+                .window-close:hover {
+                    border-color: var(--p-dim);
+                    color: var(--p-dim);
+                    box-shadow: none;
+                    background: transparent;
+                }
+            }
+
+            /* ── TABLET PORTRAIT: ≤ 960px ─────────────────────────────── */
+            @media (max-width: 960px) {
+                .skills-matrix {
+                    grid-template-columns: repeat(
+                        auto-fill,
+                        minmax(150px, 1fr)
+                    );
+                }
+            }
+
+            /* ── LARGE PHONE / SMALL TABLET: ≤ 768px ──────────────────── */
+            @media (max-width: 768px) {
+                body {
+                    justify-content: flex-start;
+                    padding: 1.5rem 0.8rem 6rem;
+                }
+
+                .terminal-bezel {
+                    width: 100%;
+                }
+
+                .bezel-header {
+                    gap: 0.6rem;
+                    flex-wrap: nowrap;
+                }
+
+                /* Truncate long model label on medium screens */
+                .bezel-label {
+                    font-size: 9px;
+                    letter-spacing: 2px;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                }
+
+                .crt-screen {
+                    padding: 2rem 1.8rem 1.6rem;
+                }
+
+                .screen-sub {
+                    font-size: 10px;
+                    letter-spacing: 0.18em;
+                    /* Prevent subtitle from overflowing on medium viewports */
+                    word-break: break-word;
+                    hyphens: auto;
+                }
+
+                .skills-matrix {
+                    grid-template-columns: repeat(
+                        auto-fill,
+                        minmax(130px, 1fr)
+                    );
+                    gap: 6px;
+                }
+
+                /* Status bar: hide the OS label, keep clock + baud centred */
+                .status-bar {
+                    font-size: 9px;
+                    letter-spacing: 0.1em;
+                    gap: 0.5rem;
+                }
+
+                .status-bar > span:first-child {
+                    display: none;
+                }
+
+                .status-bar {
+                    justify-content: flex-end;
+                    gap: 1rem;
+                }
+            }
+
+            /* ── PHONE PORTRAIT: ≤ 480px ──────────────────────────────── */
+            @media (max-width: 480px) {
+                body {
+                    padding: 1rem 0 6rem;
+                    font-size: 14px;
+                }
+
+                .terminal-bezel {
+                    width: 100%;
+                }
+
+                .bezel-header {
+                    padding: 0.4rem 0.6rem 0.6rem;
+                    margin-bottom: 0;
+                    gap: 0.5rem;
+                }
+
+                /* Hide one reel on small phones to save space */
+                #reel-r {
+                    display: none;
+                }
+
+                /* Shorten model label to initialism */
+                .bezel-label {
+                    font-size: 8px;
+                    letter-spacing: 1.5px;
+                }
+
+                .crt-screen {
+                    padding: 1.4rem 1rem 1.2rem;
+                    /* Remove outline to recover 8px on each side */
+                    outline: none;
+                }
+
+                .screen-title {
+                    font-size: clamp(1.3rem, 8vw, 1.8rem);
+                    letter-spacing: 0.15em;
+                    margin-bottom: 0.4rem;
+                }
+
+                .screen-sub {
+                    font-size: 9px;
+                    letter-spacing: 0.12em;
+                    padding-bottom: 0.8rem;
+                    margin-bottom: 1rem;
+                }
+
+                .terminal-log {
+                    min-height: 100px;
+                    font-size: 13px;
+                    margin-bottom: 1rem;
+                }
+
+                .input-area {
+                    gap: 0.5rem;
+                }
+
+                .prompt-label {
+                    font-size: 13px;
+                }
+
+                #terminal-input {
+                    font-size: 13px;
+                    /* On mobile, prevent iOS from zooming in on input focus */
+                    font-size: max(13px, 16px);
+                }
+
+                /* Skills: 2 columns on phone */
+                .skills-matrix {
+                    grid-template-columns: 1fr 1fr;
+                    gap: 5px;
+                }
+
+                .skill-cell {
+                    font-size: 11px;
+                    padding: 7px 8px 7px 16px;
+                    letter-spacing: 0.04em;
+                }
+
+                /* Buttons: full width, stacked */
+                .btns {
+                    flex-direction: column;
+                    align-items: stretch;
+                    gap: 0.6rem;
+                    padding: 0 1rem;
+                }
+
+                .btn {
+                    justify-content: center;
+                    padding: 12px 16px;
+                    font-size: 12px;
+                    /* Larger tap target */
+                    min-height: 44px;
+                }
+
+                /* Close button: larger tap target */
+                .window-close {
+                    width: 30px;
+                    height: 30px;
+                    top: 0.8rem;
+                    right: 0.8rem;
+                    font-size: 16px;
+                }
+
+                /* Status bar: minimal, right-aligned */
+                .status-bar {
+                    flex-wrap: wrap;
+                    justify-content: flex-end;
+                    gap: 0.4rem 0.8rem;
+                    margin-top: 1.2rem;
+                    padding-top: 0.6rem;
+                    font-size: 8px;
+                }
+
+                .status-bar > span:first-child {
+                    display: none;
+                }
+
+                /* Footer breathing room above bottom edge */
+                .footer {
+                    font-size: 8px;
+                    letter-spacing: 0.12em;
+                    bottom: 0.5rem;
+                }
+
+                /* Boot screen: bigger text proportion on small screen */
+                .boot-text {
+                    font-size: 9px;
+                    letter-spacing: 0.12em;
+                }
+
+                /* Connection closed overlay text */
+                .closed-title {
+                    font-size: clamp(1.2rem, 7vw, 1.8rem);
+                    letter-spacing: 0.15em;
+                }
+
+                .closed-sub {
+                    font-size: 9px;
+                    letter-spacing: 0.15em;
+                }
+
+                .reconnect-btn {
+                    padding: 12px 28px;
+                    font-size: 13px;
+                    min-height: 44px;
+                }
+            }
+
+            /* ── VERY SMALL PHONES: ≤ 380px ───────────────────────────── */
+            @media (max-width: 380px) {
+                .crt-screen {
+                    padding: 1.2rem 0.8rem 1rem;
+                }
+
+                .screen-title {
+                    font-size: 1.2rem;
+                    letter-spacing: 0.1em;
+                }
+
+                .screen-sub {
+                    font-size: 8px;
+                    letter-spacing: 0.08em;
+                }
+
+                /* Single column skills on tiny screens */
+                .skills-matrix {
+                    grid-template-columns: 1fr;
+                }
+
+                .terminal-log {
+                    font-size: 12px;
+                }
+                #terminal-input {
+                    font-size: 16px; /* always prevent iOS zoom */
+                }
+
+                .bezel-label {
+                    display: none;
+                }
+            }
+
+            /* ── LANDSCAPE PHONE (short viewport) ──────────────────────── */
+            @media (max-height: 500px) and (orientation: landscape) {
+                body {
+                    justify-content: flex-start;
+                    padding-top: 0.5rem;
+                    padding-bottom: 4rem;
+                }
+
+                .boot-overlay {
+                    flex-direction: row;
+                    gap: 2rem;
+                    flex-wrap: wrap;
+                    justify-content: center;
+                }
+
+                .boot-progress {
+                    margin-top: 0;
+                    width: min(240px, 40vw);
+                }
+
+                .terminal-log {
+                    min-height: 60px;
+                }
+
+                .screen-title {
+                    margin-bottom: 0.2rem;
+                }
+                .screen-sub {
+                    padding-bottom: 0.6rem;
+                    margin-bottom: 0.8rem;
+                }
+
+                .skills-matrix {
+                    grid-template-columns: repeat(
+                        auto-fill,
+                        minmax(120px, 1fr)
+                    );
+                    gap: 4px;
+                }
+
+                .skill-cell {
+                    font-size: 11px;
+                    padding: 5px 8px 5px 14px;
+                }
+
+                .contact-section {
+                    margin-top: 1rem;
+                    padding-top: 0.8rem;
+                }
+
+                .btns {
+                    flex-direction: row;
+                }
+
+                .status-bar {
+                    margin-top: 1rem;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <!-- SVG filter for subtle CRT warp (applied via JS) -->
+        <svg class="filter-host" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+                <filter
+                    id="crt-warp"
+                    x="-5%"
+                    y="-5%"
+                    width="110%"
+                    height="110%"
+                >
+                    <feTurbulence
+                        id="ft"
+                        type="fractalNoise"
+                        baseFrequency="0.008 0.006"
+                        numOctaves="3"
+                        seed="4"
+                        result="noise"
+                    />
+                    <feDisplacementMap
+                        id="fdm"
+                        in="SourceGraphic"
+                        in2="noise"
+                        scale="0"
+                        xChannelSelector="R"
+                        yChannelSelector="G"
+                    />
+                </filter>
+            </defs>
+        </svg>
+
+        <!-- Boot sequence overlay -->
+        <div class="boot-overlay" id="boot-overlay">
+            <div class="boot-scanlines"></div>
+            <div class="boot-logo">SINGULARITY</div>
+            <div class="boot-progress"><div class="boot-bar"></div></div>
+            <div class="boot-text">INITIALIZING PHOSPHOR DISPLAY...</div>
+        </div>
+
+        <!-- CRT layers -->
+        <div class="crt-vignette"></div>
+        <div class="crt-flicker"></div>
+        <div class="bloom"></div>
+        <div class="persistence"></div>
+        <div class="cursor-glow" id="cursor-glow"></div>
+
+        <!-- Terminal wrapper -->
+        <div
+            class="terminal-bezel"
+            id="terminal-bezel"
+            style="opacity: 0; transition: opacity 0.6s ease"
+        >
+            <!-- Bezel header: tape deck / system indicator row -->
+            <div class="bezel-header">
+                <div class="reel" id="reel-l"></div>
+                <div class="bezel-label">
+                    SNG-7700 // PHOSPHOR DISPLAY SYSTEM
+                </div>
+                <div class="status-leds">
+                    <div class="led" id="led-pwr"></div>
+                    <div class="led" id="led-rx"></div>
+                    <div class="led" id="led-tx"></div>
+                </div>
+                <div class="reel" id="reel-r"></div>
+            </div>
+
+            <!-- CRT screen -->
+            <div class="crt-screen">
+                <button
+                    class="window-close"
+                    onclick="closeWindow()"
+                    aria-label="Close terminal"
+                >
+                    ✕
+                </button>
+
+                <div class="screen-title">SINGULARITY</div>
+                <div class="screen-sub">
+                    SYSTEM ARCHITECT // SECURITY OPERATIONS
+                </div>
+
+                <!-- SSH simulation log -->
+                <div class="terminal-log" id="terminal-log"></div>
+
+                <!-- Input -->
+                <div class="input-area" id="input-area">
+                    <span class="prompt-label" id="prompt-text"></span>
+                    <input
+                        type="text"
+                        id="terminal-input"
+                        autocomplete="off"
+                        spellcheck="false"
+                    />
+                </div>
+
+                <!-- Post-auth content -->
+                <div class="content-wrapper" id="content-wrapper">
+                    <div class="typewriter-output" id="typewriter-output">
+                        <span id="typing-span"></span
+                        ><span class="cursor-block"></span>
+                    </div>
+
+                    <div class="skills-section" id="skills-section">
+                        <div class="skills-header">// LOADED MODULES</div>
+                        <div class="skills-matrix" id="skills-matrix">
+                            <div class="skill-cell">Infrastructure</div>
+                            <div class="skill-cell">Networking</div>
+                            <div class="skill-cell">Operations</div>
+                            <div class="skill-cell">DevSecOps</div>
+                            <div class="skill-cell">Security</div>
+                            <div class="skill-cell">Red Team</div>
+                            <div class="skill-cell">Architecture</div>
+                            <div class="skill-cell">Intelligence</div>
+                            <div class="skill-cell">Engineering</div>
+                        </div>
+                    </div>
+
+                    <div class="contact-section" id="contact-section">
+                        <div class="contact-label">// INITIATE HANDSHAKE</div>
+                        <div class="btns">
+                            <a href="https://github.com/singudotdev" class="btn"
+                                >▶ GitHub</a
+                            >
+                            <a href="mailto:contact@singu.dev" class="btn"
+                                >▶ Email</a
+                            >
+                        </div>
+                    </div>
+                </div>
+                <!-- end content-wrapper -->
+
+                <!-- Status bar at bottom of screen -->
+                <div class="status-bar">
+                    <span>SNG-OS v3.1.4 // SECURE SHELL</span>
+                    <span class="status-clock" id="status-clock"></span>
+                    <span id="baud-rate">9600 BAUD</span>
+                </div>
+            </div>
+            <!-- end .crt-screen -->
+        </div>
+        <!-- end .terminal-bezel -->
+
+        <!-- Connection closed overlay -->
+        <div class="closed-overlay" id="closed-overlay">
+            <div class="closed-title">CONNECTION CLOSED</div>
+            <div class="closed-sub">HOST TERMINATED THE SESSION</div>
+            <button class="reconnect-btn" onclick="reconnect()">
+                ↺ RECONNECT
+            </button>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">TRY HARDER &nbsp;|&nbsp; singu.dev</div>
+
+        <script>
+            /* ================================================================
+                CONFIGURATION
+            ================================================================ */
+            const CFG = {
+                passwords: [
+                    "toor",
+                    "admin",
+                    "admin1234",
+                    "1234",
+                    "pwned",
+                    "singularity",
+                    "hello",
+                    "1337",
+                ],
+                t: {
+                    boot: 2600,
+                    sshStart: 400,
+                    fp1: 900,
+                    fp2: 1500,
+                    fp3: 2200,
+                    inputDelay: 350,
+                    errorReset: 500,
+                },
+                typo: { min: 18, max: 45 },
+            };
+
+            const state = {
+                step: 0 /* 0=init, 1=hostkey, 2=password, 3=closing */,
+                ip: "?.?.?.?",
+                authFails: 0,
+                maxFails: 3,
+            };
+
+            const $ = (id) => document.getElementById(id);
+
+            const el = {
+                boot: $("boot-overlay"),
+                bezel: $("terminal-bezel"),
+                log: $("terminal-log"),
+                inputArea: $("input-area"),
+                input: $("terminal-input"),
+                promptText: $("prompt-text"),
+                content: $("content-wrapper"),
+                typeOut: $("typewriter-output"),
+                typingSpan: $("typing-span"),
+                skills: $("skills-section"),
+                contact: $("contact-section"),
+                closed: $("closed-overlay"),
+                clock: $("status-clock"),
+                baud: $("baud-rate"),
+                cursorGlow: $("cursor-glow"),
+                ledPwr: $("led-pwr"),
+                ledRx: $("led-rx"),
+                ledTx: $("led-tx"),
+                reelL: $("reel-l"),
+                reelR: $("reel-r"),
+                ft: $("ft"),
+                fdm: $("fdm"),
+            };
+
+            /* ================================================================
+                BOOT SEQUENCE
+            ================================================================ */
+            window.addEventListener("load", () => {
+                // Fetch IP
+                fetch("https://api.ipify.org?format=json")
+                    .then((r) => r.json())
+                    .then((d) => {
+                        state.ip = d.ip;
+                    })
+                    .catch(() => {});
+
+                // Clock
+                setInterval(() => {
+                    el.clock.textContent = new Date().toLocaleTimeString(
+                        "en-US",
+                        { hour12: false },
+                    );
+                }, 1000);
+                el.clock.textContent = new Date().toLocaleTimeString("en-US", {
+                    hour12: false,
+                });
+
+                // Baud rate simulation
+                const bauds = ["110", "300", "1200", "2400", "4800", "9600"];
+                let bi = 0;
+                const baudInterval = setInterval(() => {
+                    bi++;
+                    el.baud.textContent = bauds[bi] + " BAUD";
+                    if (bauds[bi] === "9600") clearInterval(baudInterval);
+                }, 300);
+
+                // Power-on after boot animation
+                setTimeout(() => {
+                    el.boot.style.opacity = "0";
+                    setTimeout(() => {
+                        el.boot.style.display = "none";
+                        el.bezel.style.opacity = "1";
+                        el.ledPwr.classList.add("active");
+                        startSSH();
+                    }, 500);
+                }, CFG.t.boot);
+            });
+
+            /* ================================================================
+                CRT EFFECTS: MOUSE TRACKING & WARP
+            ================================================================ */
+            let mx = 50,
+                my = 50,
+                tmx = 50,
+                tmy = 50;
+
+            function updatePointer(cx, cy) {
+                tmx = (cx / window.innerWidth) * 100;
+                tmy = (cy / window.innerHeight) * 100;
+                el.cursorGlow.style.setProperty("--mx", `${tmx}%`);
+                el.cursorGlow.style.setProperty("--my", `${tmy}%`);
+            }
+
+            document.addEventListener("mousemove", (e) =>
+                updatePointer(e.clientX, e.clientY),
+            );
+            document.addEventListener(
+                "touchmove",
+                (e) => {
+                    const t = e.touches[0];
+                    updatePointer(t.clientX, t.clientY);
+                },
+                { passive: true },
+            );
+            document.addEventListener(
+                "touchstart",
+                (e) => {
+                    const t = e.touches[0];
+                    updatePointer(t.clientX, t.clientY);
+                },
+                { passive: true },
+            );
+
+            /* Smooth warp animation loop */
+            (function warpLoop() {
+                mx += (tmx - mx) * 0.08;
+                my += (tmy - my) * 0.08;
+
+                const dx = mx - 50,
+                    dy = my - 50;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+                const warp = dist * 0.4;
+
+                if (el.ft && el.fdm) {
+                    el.ft.setAttribute(
+                        "baseFrequency",
+                        `${0.005 + mx / 4000} ${0.005 + my / 4000}`,
+                    );
+                    el.fdm.setAttribute("scale", warp);
+                }
+
+                requestAnimationFrame(warpLoop);
+            })();
+
+            /* Random LED flicker for Rx/Tx during comms */
+            function flashLed(led, duration) {
+                led.classList.add("active", "amber");
+                setTimeout(
+                    () => led.classList.remove("active", "amber"),
+                    duration,
+                );
+            }
+
+            function randomLedActivity() {
+                if (state.step > 0 && state.step < 3) {
+                    flashLed(el.ledRx, 60 + Math.random() * 140);
+                    setTimeout(
+                        () => flashLed(el.ledTx, 40 + Math.random() * 100),
+                        80,
+                    );
+                }
+                setTimeout(randomLedActivity, 200 + Math.random() * 800);
+            }
+            setTimeout(randomLedActivity, CFG.t.boot + 500);
+
+            /* ================================================================
+                TERMINAL: LOG & INPUT
+            ================================================================ */
+            function addLog(text, cls = "log-info") {
+                const line = document.createElement("div");
+                line.className = `log-line ${cls}`;
+                line.textContent = text;
+                el.log.appendChild(line);
+                el.log.scrollTop = el.log.scrollHeight;
+            }
+
+            function showInput(prompt, type = "text") {
+                el.promptText.textContent = prompt;
+                el.input.type = type;
+                el.input.value = "";
+                el.input.disabled = false;
+                el.inputArea.classList.add("visible");
+                setTimeout(() => el.input.focus(), 50);
+            }
+
+            function hideInput() {
+                el.inputArea.classList.remove("visible");
+            }
+
+            /* ================================================================
+                SSH SIMULATION
+            ================================================================ */
+            function startSSH() {
+                setTimeout(
+                    () =>
+                        addLog(
+                            `guest@${state.ip}:~$ ssh root@singularity`,
+                            "log-dim",
+                        ),
+                    CFG.t.sshStart,
+                );
+                setTimeout(
+                    () =>
+                        addLog(
+                            "The authenticity of host 'singularity' can't be established.",
+                            "log-info",
+                        ),
+                    CFG.t.fp1,
+                );
+                setTimeout(
+                    () =>
+                        addLog(
+                            "ECDSA key fingerprint is SHA256:2xMpY7Kj3nQ8vR1wZd5eUiLo4bCf9gHs0aXp6tNmEyI.",
+                            "log-info",
+                        ),
+                    CFG.t.fp2,
+                );
+                setTimeout(() => {
+                    addLog(
+                        "Are you sure you want to continue connecting (yes/no)? ",
+                        "log-info",
+                    );
+                    showInput("(yes/no)?", "text");
+                    state.step = 1;
+                    el.reelL.classList.add("spinning");
+                    el.reelR.classList.add("spinning");
+                }, CFG.t.fp3);
+            }
+
+            el.input.addEventListener("keydown", (e) => {
+                if (e.key !== "Enter") return;
+                const val = el.input.value.trim().toLowerCase();
+                el.input.disabled = true;
+
+                setTimeout(() => {
+                    if (state.step === 1) {
+                        if (val === "yes" || val === "y") {
+                            addLog("yes", "log-success");
+                            addLog(
+                                "Warning: Permanently added 'singularity' (ECDSA) to the list of known hosts.",
+                                "log-info",
+                            );
+                            addLog("root@singularity's password:", "log-info");
+                            showInput("Password:", "password");
+                            state.step = 2;
+                        } else if (val === "no" || val === "n") {
+                            addLog("no", "log-error");
+                            addLog(
+                                "Host key verification failed.",
+                                "log-error",
+                            );
+                            addLog(
+                                "Connection to singularity port 22 closed.",
+                                "log-error",
+                            );
+                            addLog("Press ENTER to continue...", "log-dim");
+                            hideInput();
+                            state.step = 3;
+                            el.reelL.classList.remove("spinning");
+                            el.reelR.classList.remove("spinning");
+                            return;
+                        } else {
+                            addLog("Please type 'yes' or 'no'.", "log-error");
+                            el.input.disabled = false;
+                            el.input.focus();
+                            return;
+                        }
+                    } else if (state.step === 2) {
+                        if (CFG.passwords.includes(val)) {
+                            doLogin();
+                        } else {
+                            state.authFails++;
+                            const remaining = state.maxFails - state.authFails;
+
+                            if (state.authFails >= state.maxFails) {
+                                /* ── LOCKOUT: max attempts reached ── */
+                                addLog(
+                                    "Permission denied, please try again.",
+                                    "log-error",
+                                );
+                                el.input.classList.add("error");
+                                el.input.value = "";
+                                el.input.disabled = true;
+
+                                setTimeout(() => {
+                                    el.input.classList.remove("error");
+                                    hideInput();
+                                    addLog("", "log-dim");
+                                    addLog(
+                                        "ssh: connect to host singularity port 22: Too many authentication failures",
+                                        "log-error",
+                                    );
+                                    addLog(
+                                        "Disconnecting: Too many authentication failures for root",
+                                        "log-error",
+                                    );
+                                    addLog("", "log-dim");
+                                    addLog(
+                                        "Press ENTER to reconnect...",
+                                        "log-dim",
+                                    );
+                                    el.reelL.classList.remove("spinning");
+                                    el.reelR.classList.remove("spinning");
+                                    state.step = 3;
+
+                                    /* Dramatic red screen flicker on lockout */
+                                    const flicker =
+                                        document.querySelector(".crt-flicker");
+                                    flicker.style.animation = "none";
+                                    flicker.style.opacity = "1";
+                                    flicker.style.background =
+                                        "rgba(255,64,64,0.06)";
+                                    setTimeout(() => {
+                                        flicker.style.opacity = "0";
+                                        flicker.style.background = "";
+                                        flicker.style.animation =
+                                            "hflicker 0.1s steps(1) infinite";
+                                    }, 700);
+                                }, CFG.t.errorReset);
+                                return;
+                            } else {
+                                /* ── NORMAL FAILURE with remaining-attempts warning ── */
+                                addLog(
+                                    "Permission denied, please try again.",
+                                    "log-error",
+                                );
+                                if (remaining === 1) {
+                                    addLog(
+                                        "Warning: 1 attempt remaining before session termination.",
+                                        "log-error",
+                                    );
+                                } else {
+                                    addLog(
+                                        `Warning: ${remaining} attempts remaining.`,
+                                        "log-dim",
+                                    );
+                                }
+                                el.input.classList.add("error");
+                                el.input.value = "";
+                                setTimeout(() => {
+                                    el.input.classList.remove("error");
+                                    el.input.disabled = false;
+                                    el.input.focus();
+                                }, CFG.t.errorReset);
+                                return;
+                            }
+                        }
+                    }
+                    el.input.disabled = false;
+                    el.input.focus();
+                }, CFG.t.inputDelay);
+            });
+
+            /* ENTER on step 3 = close window */
+            document.addEventListener("keydown", (e) => {
+                if (state.step === 3 && e.key === "Enter") closeWindow();
+            });
+
+            /* ================================================================
+                LOGIN SUCCESS
+            ================================================================ */
+            function doLogin() {
+                state.step = 99;
+                hideInput();
+
+                addLog(
+                    `Last login: ${new Date().toUTCString()} from ${state.ip}`,
+                    "log-dim",
+                );
+                addLog(
+                    "Authentication successful. Welcome back.",
+                    "log-success",
+                );
+
+                el.content.style.display = "block";
+                el.typeOut.style.display = "block";
+
+                const msg =
+                    "Initializing security protocols...\nLoading modules: [automation, red-tools, blue-tools]...\nEstablishing encrypted channel...\nAccess granted. Welcome to Singularity.";
+
+                typeWriter(msg, () => {
+                    setTimeout(() => {
+                        el.log.style.display = "none";
+                        el.typeOut.style.display = "none";
+
+                        /* Reveal skills matrix one cell at a time */
+                        el.skills.style.display = "block";
+                        setTimeout(
+                            () => el.skills.classList.add("visible"),
+                            40,
+                        );
+
+                        const cells = el.skills.querySelectorAll(".skill-cell");
+                        cells.forEach((c, i) => {
+                            c.style.opacity = "0";
+                            c.style.borderColor = "var(--p-ghost)";
+                            setTimeout(
+                                () => {
+                                    c.style.transition =
+                                        "opacity 0.3s ease, border-color 0.3s ease";
+                                    c.style.opacity = "1";
+                                    c.style.borderColor = "";
+                                },
+                                200 + i * 70,
+                            );
+                        });
+
+                        /* Contact section */
+                        setTimeout(() => {
+                            el.contact.style.display = "block";
+                            setTimeout(
+                                () => el.contact.classList.add("visible"),
+                                40,
+                            );
+                            el.reelL.classList.remove("spinning");
+                            el.reelR.classList.remove("spinning");
+                            el.ledRx.classList.remove("active", "amber");
+                            el.ledTx.classList.remove("active", "amber");
+                        }, 900);
+                    }, 2800);
+                });
+            }
+
+            function typeWriter(text, cb) {
+                let i = 0;
+                function tick() {
+                    if (i < text.length) {
+                        const c = text[i++];
+                        el.typingSpan.innerHTML +=
+                            c === "\n"
+                                ? "<br>"
+                                : c
+                                      .replace(/&/g, "&amp;")
+                                      .replace(/</g, "&lt;");
+                        setTimeout(
+                            tick,
+                            Math.random() * (CFG.typo.max - CFG.typo.min) +
+                                CFG.typo.min,
+                        );
+                    } else if (cb) cb();
+                }
+                tick();
+            }
+
+            /* ================================================================
+                CLOSE & RECONNECT
+            ================================================================ */
+            function closeWindow() {
+                const bezel = $("terminal-bezel");
+                bezel.style.opacity = "0";
+                bezel.style.transform = "scaleY(0.005) scaleX(1.05)";
+                bezel.style.transition =
+                    "opacity 0.3s ease, transform 0.3s ease";
+
+                setTimeout(() => {
+                    bezel.style.display = "none";
+                    el.closed.classList.add("visible");
+                    el.ledPwr.classList.remove("active");
+                    void el.closed.offsetWidth;
+                    el.closed.classList.add("fade-in");
+                }, 320);
+            }
+
+            function reconnect() {
+                window.location.reload();
+            }
+        </script>
+    </body>
+</html>
