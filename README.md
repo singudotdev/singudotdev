@@ -1,4 +1,4 @@
-# 𝚂𝚒𝚗𝚐𝚞𝚕𝚊𝚛𝚒𝚝𝚢 <img src="https://img.shields.io/badge/Singu-DEV-green" alt="singudotdev" /> <img src="https://komarev.com/ghpvc/?username=singudotdev&label=Profile%20Views&color=blueviolet&style=flat" alt="singudotdev" />
+# 𝚂 𝚒 𝚗 𝚐 𝚞 𝚕 𝚊 𝚛 𝚒 𝚝 𝚢 <img src="https://img.shields.io/badge/Singu-DEV-green" alt="singudotdev" /> <img src="https://komarev.com/ghpvc/?username=singudotdev&label=Profile%20Views&color=blueviolet&style=flat" alt="singudotdev" />
 
 - DevSecOps
 - Software Analysis
