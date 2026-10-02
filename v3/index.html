@@ -24,6 +24,10 @@
                 --p-amber: #f0c000; /* P1 amber glow base */
                 --p-dim: #4a6800; /* dim phosphor, barely lit */
                 --p-ghost: #1a2400; /* persistence afterimage */
+                /* Text-only tints: --p-dim/--p-ghost are ~3:1 / ~1.2:1 on --bg and
+                   unreadable once scanlines and vignette darken them further. */
+                --t-dim: #80a200; /* ~7:1 on --bg */
+                --t-ghost: #668a00; /* ~5:1 on --bg */
                 --p-red: #ff4040; /* error state only */
                 --bg: #020300; /* near-absolute black glass */
                 --scanline-a: rgba(0, 0, 0, 0.55);
@@ -321,7 +325,7 @@
             .bezel-label {
                 font-size: 10px;
                 letter-spacing: 3px;
-                color: var(--p-dim);
+                color: var(--t-dim);
                 text-transform: uppercase;
                 flex: 1;
             }
@@ -419,7 +423,7 @@
                 right: 1.2rem;
                 background: transparent;
                 border: 1px solid var(--p-dim);
-                color: var(--p-dim);
+                color: var(--t-dim);
                 width: 22px;
                 height: 22px;
                 font-size: 14px;
@@ -480,7 +484,7 @@
             .screen-sub {
                 font-size: 11px;
                 letter-spacing: 0.3em;
-                color: var(--p-dim);
+                color: var(--t-dim);
                 text-transform: uppercase;
                 border-bottom: 1px dashed var(--p-ghost);
                 padding-bottom: 1.2rem;
@@ -531,7 +535,7 @@
                 text-shadow: var(--glow-err);
             }
             .log-dim {
-                color: var(--p-dim);
+                color: var(--t-dim);
                 text-shadow: none;
             }
 
@@ -646,13 +650,13 @@
                 border-top: 1px solid var(--p-ghost);
                 font-size: 10px;
                 letter-spacing: 0.15em;
-                color: var(--p-ghost);
+                color: var(--t-ghost);
                 text-transform: uppercase;
                 overflow: hidden;
             }
 
             .status-clock {
-                color: var(--p-dim);
+                color: var(--t-dim);
             }
 
             /* ─── PHOSPHOR PERSISTENCE OVERLAY ──────────────────────────────────
@@ -708,7 +712,7 @@
             .closed-sub {
                 font-size: 11px;
                 letter-spacing: 0.25em;
-                color: var(--p-dim);
+                color: var(--t-dim);
             }
 
             .reconnect-btn {
@@ -741,7 +745,7 @@
                 text-align: center;
                 font-size: 9px;
                 letter-spacing: 0.2em;
-                color: var(--p-ghost);
+                color: var(--t-ghost);
                 z-index: 20;
                 pointer-events: none;
                 text-transform: uppercase;
@@ -849,7 +853,7 @@
                 margin-top: 1rem;
                 font-size: 10px;
                 letter-spacing: 0.2em;
-                color: var(--p-dim);
+                color: var(--t-dim);
                 text-transform: uppercase;
                 animation: boot-blink 0.4s step-end infinite;
             }
@@ -887,7 +891,7 @@
             @media (hover: none) {
                 .skill-cell:hover {
                     border-color: var(--p-ghost);
-                    color: var(--p-dim);
+                    color: var(--t-dim);
                     text-shadow: none;
                     box-shadow: none;
                 }
@@ -905,7 +909,7 @@
                 }
                 .window-close:hover {
                     border-color: var(--p-dim);
-                    color: var(--p-dim);
+                    color: var(--t-dim);
                     box-shadow: none;
                     background: transparent;
                 }
@@ -1335,7 +1339,7 @@
                 font-size: 13px;
                 letter-spacing: 0.1em;
                 text-transform: uppercase;
-                color: var(--p-dim);
+                color: var(--t-dim);
                 line-height: 1.9;
             }
 
@@ -1377,7 +1381,7 @@
                 margin-top: 1.2rem;
                 font-size: 13px;
                 line-height: 1.7;
-                color: var(--p-dim);
+                color: var(--t-dim);
             }
 
             .prompt {
@@ -1432,7 +1436,7 @@
                 font-size: 11px;
                 letter-spacing: 0.1em;
                 text-transform: uppercase;
-                color: var(--p-dim);
+                color: var(--t-dim);
                 margin-bottom: 0.6rem;
             }
 
@@ -1455,7 +1459,7 @@
                 font-size: 11px;
                 letter-spacing: 0.08em;
                 text-transform: uppercase;
-                color: var(--p-ghost);
+                color: var(--t-ghost);
                 border-top: 1px solid var(--p-ghost);
                 padding-top: 1.5rem;
             }
