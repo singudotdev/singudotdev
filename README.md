@@ -7,7 +7,7 @@
 <br/>
 
 <img src="https://img.shields.io/badge/Singu-DEV-64FFDA?style=for-the-badge&logo=hackthebox&logoColor=0D1B2A&labelColor=0D1B2A" alt="singudotdev" />
-<img src="https://komarev.com/ghpvc/?username=singudotdev&label=PROFILE+VIEWS&color=0D1B2A&style=for-the-badge" alt="singudotdev" />
+<img src="https://api.visitorbadge.io/api/visitors?path=singudotdev&label=PROFILE%20VIEWS&countColor=%230D1B2A&style=for-the-badge" alt="singudotdev" />
 
 </div>
 
